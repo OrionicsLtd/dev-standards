@@ -47,6 +47,17 @@ Don't introduce new tools — find what the repo already uses and use it:
 - **Group by feature, not by layer-within-layer.** Keep the things that change
   together close together.
 
+## Use config files
+
+Don't hardcode parameters within random scripts.
+
+- **Config files**: set up a config file for the repository (or a config subpackage if more appropriate), where you can introduce
+  relevant constants and parameters.
+- **Env variables**: only use environment variables for secrets such as API keys, seed phrases, RPC nodes etc.
+  Always ensure these are gitignored.
+- **CLI parameters**: for scripts that use CLI arguments, do not overcrowd -- allow tunable configs via CLI only for a small set of
+  very important parameters.
+
 ## Reuse before adding
 
 Before writing a new function/class/module, ask **"does this already exist?"**
