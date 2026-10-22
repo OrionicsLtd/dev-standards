@@ -18,6 +18,9 @@ pin one for a concrete reason — a bug you need fixed, a security advisory, a
 feature the task actually requires. If the task works with what's already there,
 change nothing.
 
+For a security advisory, follow `security-advisories`: it confirms the advisory
+applies and picks the lowest version that fixes it.
+
 - **Don't add a package for something small** — prefer the standard library or an
   existing dependency over a new package for a few lines of functionality.
 - **Don't upgrade unrelated packages** — a bump that isn't part of the task is
