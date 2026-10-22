@@ -2,7 +2,8 @@
 
 A collection of [Claude Code](https://claude.com/claude-code) skills used at
 Orionics Ltd. Each skill encodes a reusable working practice: coding standards,
-context hygiene, dependency safety, clarifying ambiguity and writing specs, that
+context hygiene, dependency safety, clarifying ambiguity, writing specs and
+handling security advisories, that
 Claude loads automatically when a task matches its description. Alongside them, a
 quality gate (hooks, a reviewer agent and a user-level `CLAUDE.md`) holds work to
 those practices before Claude reports it as done.
@@ -24,6 +25,7 @@ details.
 | [`coding-standards`](skills/coding-standards/SKILL.md) | Writing or editing code, adding a module, or reviewing structure. Keep changes small, well-named, type-hinted, and consistent with the surrounding code; functional core, imperative shell. |
 | [`dependency-safety`](skills/dependency-safety/SKILL.md) | A change touches `pyproject.toml`, a lock file, or a Dockerfile. Only touch a dependency when necessary and make the smallest reviewable change. |
 | [`lean-context`](skills/lean-context/SKILL.md) | Exploring, understanding, or debugging a codebase. Scout with search, read only the slices you need, and keep the context window lean. |
+| [`security-advisories`](skills/security-advisories/SKILL.md) | Checking a repo, its runtimes or this machine for known vulnerabilities, triaging security news against what is actually used, and fixing with the smallest upgrade that contains the fix. Uses only free live sources (OSV via `osv-scanner`, CISA's exploited-vulnerability catalog, EPSS, release indexes). |
 | [`spec-writing`](skills/spec-writing/SKILL.md) | Writing a spec or design doc, or starting work big enough to need one. Numbered requirements, each with an acceptance test written before the implementation, plus the wiring and docs the change must touch. |
 
 ## Quality gate
@@ -85,6 +87,10 @@ quality gate, also merge the `hooks` block of
 start a new session (agents load at session start). The gate needs `python3` 3.12
 or newer on `PATH`; run its tests with
 `cd hooks && uv run --no-project --with pytest pytest`.
+
+`security-advisories` needs [`osv-scanner`](https://github.com/google/osv-scanner)
+(`brew install osv-scanner`) and `python3` 3.12 or newer; run its tests with
+`cd skills/security-advisories/scripts && uv run --no-project --with pytest pytest`.
 
 The root `CLAUDE.md` also applies to sessions working in this repository.
 
