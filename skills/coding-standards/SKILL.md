@@ -36,16 +36,31 @@ Don't introduce new tools — find what the repo already uses and use it:
 
 ## Small, focused modules
 
-- Aim for **under ~200 lines per file**. When a file grows past that, it's usually
-  doing too much — split it along its natural seams. When the pieces cluster
+- Aim for **under ~200 lines per file**; **400 is the hard limit** (the devgate Stop hook
+  blocks a change that pushes a file past it). A file past 200 is usually doing too
+  much — split it along its natural seams. When the pieces cluster
   around one theme, promote them into a subpackage (a directory with `__init__.py`).
   A long file is a smell that a concept is hiding inside another.
+- Prefer nesting over a flat pile. A new module belongs in a themed subpackage
+  (`<pkg>/<theme>/thing.py`), not as yet another file at the package root.
+  Adding the ~5th flat script to a directory is the signal to group the existing
+  ones into subpackages first.
 - **One concept per module, one theme per subpackage.** Name each for what it
   holds — `parsers.py`, not `utils_and_helpers.py`; `billing/`, not `misc/`.
   `utils`/`helpers`/`common`/`shared`/`misc` at either level is where cohesion
   goes to die — give things a real home.
 - **Group by feature, not by layer-within-layer.** Keep the things that change
   together close together.
+
+## Reuse before adding
+
+Before writing a new function/class/module, ask **"does this already exist?"**
+Duplicated logic (three functions doing the same thing) is a maintenance trap.
+
+- If it exists, use or extend it. If it doesn't, decide **which existing place it
+  belongs in** rather than defaulting to a new file.
+- If the honest answer is "a new top-level package," the feature is probably big
+  enough to deserve one — but **flag that before creating it**, don't do it silently.
 
 ## Use config files
 
@@ -57,16 +72,6 @@ Don't hardcode parameters within random scripts.
   Always ensure these are gitignored.
 - **CLI parameters**: for scripts that use CLI arguments, do not overcrowd -- allow tunable configs via CLI only for a small set of
   very important parameters.
-
-## Reuse before adding
-
-Before writing a new function/class/module, ask **"does this already exist?"**
-Duplicated logic (three functions doing the same thing) is a maintenance trap.
-
-- If it exists, use or extend it. If it doesn't, decide **which existing place it
-  belongs in** rather than defaulting to a new file.
-- If the honest answer is "a new top-level package," the feature is probably big
-  enough to deserve one — but **flag that before creating it**, don't do it silently.
 
 ## Naming
 
@@ -95,10 +100,42 @@ would be wrong. A comment restating the code is noise.
 
 - Keep comments **objective and professional** — as if they were always part of the
   codebase. Never conversational meta ("as requested", "as you asked", "fixed the
-  bug you mentioned") and never review/planning artifacts (priority tags like
-  `P1`/`B2`, "TODO from review") left in source.
+  bug you mentioned"), never history ("now", "previously", "after the refactor"),
+  and never review/planning artifacts (priority tags like `P1`/`B2`, work-package or
+  phase numbers, spec sections, "TODO from review") left in source. No section banners.
+- A docstring or comment that describes behaviour the code no longer has is a bug.
+  Update or delete it in the same change.
 - Note genuine quirks and gotchas (e.g. a preserved upstream typo, a workaround for
   a known bug) so the next reader doesn't "fix" them.
+
+## Design: functional core, imperative shell
+
+The principles of *Functional Programming in Scala*, applied in the host language's
+own idiom — no FP libraries, monad stacks or point-free tricks.
+
+- **Pure core, effects at the edges.** Logic is functions from inputs to outputs.
+  File, network, clock, randomness and environment access live in a thin outer
+  layer that calls the core and passes values in. A function that both decides
+  and does I/O should usually be two.
+- **Referential transparency.** A function's result depends only on its arguments:
+  no reads of mutable module state, no hidden caches that change answers.
+- **Immutable data.** Frozen dataclasses / frozen pydantic models, tuples; return a
+  new value instead of mutating an argument. Mutation local to a function that
+  nobody else can observe is fine.
+- **Make illegal states unrepresentable.** Model alternatives as `Enum`/`Literal`
+  or a union of dataclasses handled with `match` (and `assert_never` for
+  exhaustiveness), not string flags and clusters of optional fields. Parse
+  untrusted input once at the boundary into precise types; the core never
+  re-validates.
+- **Total functions, errors as values.** Handle every input. Where failure is an
+  expected outcome, return it in the type (a result union, an explicit `None`
+  with a documented meaning); raise only for bugs and truly exceptional
+  conditions, and catch at the boundary.
+- **Composition.** Small functions combined; comprehensions and generators over
+  index loops; split a function rather than add a boolean mode flag.
+- **Laws, then tests.** State the properties an API must keep (round-trip,
+  idempotence, ordering, conservation) and test them with property-based tests
+  (Hypothesis in Python) alongside examples.
 
 ## Keep the diff minimal and clean
 
@@ -109,6 +146,8 @@ would be wrong. A comment restating the code is noise.
 
 ## Verify before done
 
-Run the repo's lint/format, type checks, and tests after the change. "It should
-work" isn't done — a clean lint + type pass (and green tests, where they exist) is
-the minimum before calling an edit complete.
+Run the repo's lint/format, type checks, and tests after the change, then exercise
+it through its real entry point without spending money (dry runs, fixtures,
+mocked or recorded responses; never paid API or model calls). "It should work"
+isn't done; see the global
+CLAUDE.md for the full definition of done and the report format.
