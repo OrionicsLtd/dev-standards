@@ -1,12 +1,12 @@
-# claude-skills
+# dev-standards
 
-A collection of [Claude Code](https://claude.com/claude-code) skills used at
-Orionics Ltd. Each skill encodes a reusable working practice: coding standards,
-context hygiene, dependency safety, clarifying ambiguity, writing specs and
-handling security advisories, that
-Claude loads automatically when a task matches its description. Alongside them, a
-quality gate (hooks, a reviewer agent and a user-level `CLAUDE.md`) holds work to
-those practices before Claude reports it as done.
+Orionics Ltd's engineering standards, packaged for [Claude Code](https://claude.com/claude-code).
+Skills encode reusable working practices (coding standards, context hygiene,
+dependency safety, clarifying ambiguity, writing specs and handling security
+advisories) that Claude loads automatically when a task matches their
+description. Alongside them, a quality gate (hooks, a reviewer agent and a
+user-level `CLAUDE.md`) holds work to those practices before Claude reports it
+as done.
 
 ## What is a skill?
 
