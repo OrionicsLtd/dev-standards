@@ -10,7 +10,7 @@ When a choice could reasonably go more than one way, or an assumption about a li
 - Verification never costs money: no paid model or API calls, cloud jobs or on-chain transactions. Use mocks, fixtures, recorded responses or a dry-run mode; if none exists and only a paid run would prove it, say so under `Not verified:` and leave the decision to the user.
 - When you change a name, flag, behaviour or file, grep docs, skills, prompts and specs for the old one and update them in the same change.
 - When you fix one path, find its siblings (same pattern, same switch, same schema) and fix or rule out each.
-- For non-trivial changes, run the `diff-reviewer` agent in the foreground before reporting; fix what it confirms. The Stop hook (devgate) enforces checks, style rules and this review.
+- Order the work: implement → lint, type-check, test → the `diff-reviewer` agent once per unit of work (the Stop hook says when) → fix what it confirms → then any expensive end-to-end verification (rebuilds, re-measurements, live runs) once, last. A re-review gets the earlier findings and the files changed since, not the whole diff.
 - End every report that changed code with: the commands run and their results, the requirements covered, and a final `Not verified:` line naming what was not checked (`Not verified: nothing` if so).
 
 ## Code

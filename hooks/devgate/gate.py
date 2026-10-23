@@ -59,9 +59,7 @@ def unreviewed(root: Path, snap: Snapshot, session: state.Session, config: Confi
     return own_lines(snap, session, config) - state.reviewed(root)
 
 
-def _review_request(
-    pending: Counter[str], snap: Snapshot, config: Config, candidates: list[str]
-) -> str:
+def _review_request(pending: Counter[str], snap: Snapshot, config: Config) -> str:
     paths = sorted({key.split("\0", 1)[0] for key in pending})
     notes = style.dense(snap.files, config)
     lines = [
@@ -73,10 +71,6 @@ def _review_request(
     ]
     if notes:
         lines.append("Ask it to look hard at these comment-heavy files: " + "; ".join(notes))
-    if candidates:
-        lines.append(
-            "Already oversized and growing; ask it where each splits: " + "; ".join(candidates)
-        )
     return "\n".join(lines)
 
 
@@ -107,10 +101,14 @@ def evaluate(
     problems += filter(None, [_style(snap, lengths, config)])
     if problems:
         return Decision(reason="Fix these before finishing:\n\n" + "\n\n".join(problems))
+    # Files already oversized that grew further never block: they go on the split backlog, which
+    # every session start shows, and in the notice.
+    grown = style.grown(snap.files, lengths, config)
+    state.note_oversized(root, {path: length for path, length, _ in grown})
     candidates = style.growing(snap.files, lengths, config)
     pending = unreviewed(root, snap, session, config)
     if sum(pending.values()) >= config.review_threshold:
-        reason = _review_request(pending, snap, config, candidates)
+        reason = _review_request(pending, snap, config)
         return Decision(reason=reason, checked=fingerprint)
     if snap.files and not EVIDENCE.search(message):
         return Decision(

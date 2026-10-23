@@ -7,6 +7,7 @@ fingerprint and the block count belong to one session.
 import json
 from collections import Counter
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from pathlib import Path
 
 from .diff import git
@@ -55,3 +56,24 @@ def reviewed(root: Path) -> Counter[str]:
 def save_reviewed(root: Path, lines: Counter[str]) -> None:
     """Record the added lines a reviewer has just seen."""
     (directory(root) / "reviewed.json").write_text(json.dumps(dict(lines)))
+
+
+def backlog(root: Path) -> dict[str, dict]:
+    """Files waiting to be split: path -> {"lines", "since"}."""
+    return _read(directory(root) / "oversized.json")
+
+
+def save_backlog(root: Path, entries: dict[str, dict]) -> None:
+    """Replace the split backlog."""
+    (directory(root) / "oversized.json").write_text(json.dumps(entries, indent=1, sort_keys=True))
+
+
+def note_oversized(root: Path, sizes: dict[str, int], today: str | None = None) -> None:
+    """Add or refresh oversized files on the split backlog, keeping when each was first seen."""
+    if not sizes:
+        return
+    entries = backlog(root)
+    day = today or date.today().isoformat()
+    for path, lines in sizes.items():
+        entries[path] = {"lines": lines, "since": entries.get(path, {}).get("since", day)}
+    save_backlog(root, entries)

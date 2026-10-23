@@ -47,7 +47,7 @@ class Config:
     max_lines: int = 400
     size_growth: int = 20
     size_exempt: tuple[str, ...] = ("tests/*", "*/tests/*", "test_*", "*_test.*", "*.md")
-    review_threshold: int = 80
+    review_threshold: int = 200
     banned: tuple[str, ...] = BANNED
     max_blocks: int = 3
     timeout: int = 300

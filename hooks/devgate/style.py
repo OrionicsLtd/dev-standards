@@ -96,12 +96,22 @@ def oversized(
     ]
 
 
+def grown(
+    files: tuple[FileDiff, ...], lengths: dict[str, int], config: Config
+) -> list[tuple[str, int, int]]:
+    """Files already over the limit that this change grew further: (path, lines, growth)."""
+    return [
+        (path, length, growth)
+        for path, length, growth in _sizes(files, lengths, config)
+        if length - growth > config.max_lines and growth > config.size_growth
+    ]
+
+
 def growing(files: tuple[FileDiff, ...], lengths: dict[str, int], config: Config) -> list[str]:
     """Name files already over the limit that this change grew further, as split candidates."""
     return [
         f"{path} ({length} lines, +{growth})"
-        for path, length, growth in _sizes(files, lengths, config)
-        if length - growth > config.max_lines and growth > config.size_growth
+        for path, length, growth in grown(files, lengths, config)
     ]
 
 

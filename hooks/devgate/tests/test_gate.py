@@ -88,3 +88,21 @@ def test_failing_check_blocks_with_its_output(repo: Path, monkeypatch: pytest.Mo
 
 def test_outside_a_repository_is_silent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert _fire(monkeypatch, "stop", tmp_path, last_assistant_message="x") == {}
+
+
+def test_growing_oversized_files_go_on_a_backlog_not_into_the_block(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    big = "".join(f"v{i} = {i}\n" for i in range(450))
+    (repo / "big.py").write_text(big)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "big"], cwd=repo, check=True)
+    _fire(monkeypatch, "session-start", repo)
+    (repo / "big.py").write_text(big + "".join(f"w{i} = {i}\n" for i in range(30)))
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
+    assert "diff-reviewer" in reply["reason"] and "big.py (480" not in reply["reason"]
+    # The next session is told, until the file is split.
+    shown = _fire(monkeypatch, "session-start", repo, session_id="s2")
+    assert "big.py (480 lines, since" in shown["hookSpecificOutput"]["additionalContext"]
+    (repo / "big.py").write_text("v = 1\n")
+    assert _fire(monkeypatch, "session-start", repo, session_id="s3") == {}

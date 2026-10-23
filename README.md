@@ -35,7 +35,7 @@ Instructions alone drift over a long session; these pieces check the work instea
 | Piece | What it does |
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) | Always-loaded working agreement: what "done" means, comment and module-size rules, and the report format (ending in a `Not verified:` line). |
-| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests, comments, dead code. |
+| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests, comments, dead code. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since. |
 | [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
 
 devgate only judges lines the session added; changes already uncommitted when the
@@ -44,11 +44,15 @@ session started are left alone. Checks are detected from the repo's own config
 repository without them simply runs none. After three consecutive blocks it lets
 the turn end and reports what is still open. State lives in `.git/devgate/`.
 
+A file already over the limit that a change grows further does not block: it goes on
+a split backlog (`.git/devgate/oversized.json`), which every session start shows until
+the file is split back under the limit.
+
 Override per repository in `.claude/devgate.toml`:
 
 ```toml
 enabled = true            # false turns the gate off for this repo
-review_threshold = 80     # unreviewed added lines before diff-reviewer is required
+review_threshold = 200    # unreviewed added lines before diff-reviewer is required
 max_lines = 400           # file-size limit for code files
 extra_banned = ['\bTicket-\d+\b']   # more comment patterns to reject
 

@@ -9,12 +9,35 @@ from .diff import added_lines, find_root, snapshot
 
 
 def _session_start(root: Path, event: dict) -> dict:
-    """Record what was already uncommitted, so the session answers only for its own changes."""
+    """Record what was already uncommitted, so the session answers only for its own changes, and
+    show the split backlog so oversized files stay in view without blocking any turn."""
+    settings = config.load(root)
     if state.load_session(root, event["session_id"]) is None:
-        settings = config.load(root)
         baseline = added_lines(snapshot(root).files, settings.review_suffixes)
         state.save_session(root, event["session_id"], state.Session(baseline=dict(baseline)))
-    return {}
+    backlog = _current_backlog(root, settings.max_lines)
+    if not backlog:
+        return {}
+    listed = "; ".join(f"{path} ({e['lines']} lines, since {e['since']})" for path, e in backlog)
+    note = (
+        f"devgate split backlog -- over {settings.max_lines} lines and still growing; split one "
+        f"before adding to it: {listed}"
+    )
+    return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": note}}
+
+
+def _current_backlog(root: Path, max_lines: int) -> list[tuple[str, dict]]:
+    """The backlog less files that were split or removed since, with their current lengths."""
+    entries: dict[str, dict] = {}
+    for path, entry in state.backlog(root).items():
+        try:
+            lines = len((root / path).read_text().splitlines())
+        except (OSError, UnicodeDecodeError):
+            continue
+        if lines > max_lines:
+            entries[path] = {**entry, "lines": lines}
+    state.save_backlog(root, entries)
+    return sorted(entries.items(), key=lambda kv: -kv[1]["lines"])
 
 
 def _subagent_stop(root: Path, event: dict) -> dict:
