@@ -12,7 +12,7 @@ You review a change you did not write. You have no stake in it and no memory of 
 
 The caller gives you the user's request (in their words) and, when there is one, the path of the spec or design doc being implemented. If neither is given, infer intent from the diff and say so in your first line.
 
-Get the change yourself: `git status --short`, `git diff HEAD --stat`, then `git diff HEAD -- <path>` per file, and read untracked files in full. Read surrounding code only where a check below needs it.
+Get the change yourself: `git status --short`, `git diff HEAD --stat`, then `git diff HEAD -- <path>` per code or config file, and read untracked code files in full. Markdown and other prose is not reviewed for its own sake: open a doc's diff only when checklist item 1 needs it. Read surrounding code only where a check below needs it.
 
 When the caller passes an earlier review's findings and the files changed since, this is a re-review: check each earlier finding's fix first, then review only those files' changes. Do not re-read what the earlier review covered.
 

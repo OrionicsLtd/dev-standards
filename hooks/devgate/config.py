@@ -9,7 +9,9 @@ from typing import Any
 OVERRIDE = Path(".claude/devgate.toml")
 
 CODE_SUFFIXES = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".sol", ".sh", ".java")
-REVIEW_SUFFIXES = (*CODE_SUFFIXES, ".md", ".toml", ".yaml", ".yml")
+# Prose is left out: docs and specs can be long, and the reviewer reaches the ones a code change
+# makes stale through the code, not by reading every prose diff.
+REVIEW_SUFFIXES = (*CODE_SUFFIXES, ".toml", ".yaml", ".yml")
 
 # Comments and docstrings must read as if they were always part of the codebase: no planning
 # vocabulary and no conversation.

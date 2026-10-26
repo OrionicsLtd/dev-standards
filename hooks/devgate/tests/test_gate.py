@@ -106,3 +106,12 @@ def test_growing_oversized_files_go_on_a_backlog_not_into_the_block(
     assert "big.py (480 lines, since" in shown["hookSpecificOutput"]["additionalContext"]
     (repo / "big.py").write_text("v = 1\n")
     assert _fire(monkeypatch, "session-start", repo, session_id="s3") == {}
+
+
+def test_markdown_does_not_count_toward_review(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _fire(monkeypatch, "session-start", repo)
+    (repo / "notes.md").write_text("".join(f"line {i}\n" for i in range(50)))
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message="done") == {}
+    (repo / "app.py").write_text("x = 1\ny = 2\n")
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
+    assert "Not verified" in reply["reason"]

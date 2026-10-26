@@ -41,7 +41,8 @@ Instructions alone drift over a long session; these pieces check the work instea
 devgate only judges lines the session added; changes already uncommitted when the
 session started are left alone. Checks are detected from the repo's own config
 (ruff, pyright, mypy and pytest, run through `uv`/`poetry` when locked), so a
-repository without them simply runs none. After three consecutive blocks it lets
+repository without them simply runs none. Only code and config lines count toward
+review; Markdown and other prose don't. After three consecutive blocks it lets
 the turn end and reports what is still open. State lives in `.git/devgate/`.
 
 A file already over the limit that a change grows further does not block: it goes on
@@ -53,6 +54,7 @@ Override per repository in `.claude/devgate.toml`:
 ```toml
 enabled = true            # false turns the gate off for this repo
 review_threshold = 200    # unreviewed added lines before diff-reviewer is required
+review_suffixes = ['.py', '.ts', '.md']   # files whose added lines count; Markdown is out by default
 max_lines = 400           # file-size limit for code files
 extra_banned = ['\bTicket-\d+\b']   # more comment patterns to reject
 
