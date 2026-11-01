@@ -2,8 +2,8 @@
 
 Orionics Ltd's engineering standards, packaged for [Claude Code](https://claude.com/claude-code).
 Skills encode reusable working practices (coding standards, context hygiene,
-dependency safety, clarifying ambiguity, writing specs and handling security
-advisories) that Claude loads automatically when a task matches their
+dependency safety, clarifying ambiguity, writing specs, keeping docs and
+CLAUDE.md files current, and handling security advisories) that Claude loads automatically when a task matches their
 description. Alongside them, a quality gate (hooks, a reviewer agent and a
 user-level `CLAUDE.md`) holds work to those practices before Claude reports it
 as done.
@@ -24,9 +24,11 @@ details.
 | [`clarify-first`](skills/clarify-first/SKILL.md) | A task is unclear, a decision could go multiple ways, or you'd otherwise fill a gap with a guess. Surface and resolve ambiguity instead of shipping a plausible-but-wrong interpretation. |
 | [`coding-standards`](skills/coding-standards/SKILL.md) | Writing or editing code, adding a module, or reviewing structure. Keep changes small, well-named, type-hinted, and consistent with the surrounding code; functional core, imperative shell. |
 | [`dependency-safety`](skills/dependency-safety/SKILL.md) | A change touches `pyproject.toml`, a lock file, or a Dockerfile. Only touch a dependency when necessary and make the smallest reviewable change. |
+| [`docs-maintenance`](skills/docs-maintenance/SKILL.md) | A change alters behaviour a doc describes, a spec or plan is finished or superseded, or docs need tidying. One index, status at the top of each spec, deviations folded back into the requirements, and a check against the code before trusting a doc. |
 | [`lean-context`](skills/lean-context/SKILL.md) | Exploring, understanding, or debugging a codebase. Scout with search, read only the slices you need, and keep the context window lean. |
 | [`security-advisories`](skills/security-advisories/SKILL.md) | Checking a repo, its runtimes or this machine for known vulnerabilities, triaging security news against what is actually used, and fixing with the smallest upgrade that contains the fix. Uses only free live sources (OSV via `osv-scanner`, CISA's exploited-vulnerability catalog, EPSS, release indexes). |
-| [`spec-writing`](skills/spec-writing/SKILL.md) | Writing a spec or design doc, or starting work big enough to need one. Numbered requirements, each with an acceptance test written before the implementation, plus the wiring and docs the change must touch. |
+| [`spec-writing`](skills/spec-writing/SKILL.md) | Writing a spec or design doc, or starting work big enough to need one. Numbered requirements, each with an acceptance test written before the implementation, the domain rules and data sources the change depends on, and the wiring and docs it must touch. The spec is reviewed before its tests are written. |
+| [`writing-claude-md`](skills/writing-claude-md/SKILL.md) | Creating, editing or trimming a CLAUDE.md, AGENTS.md or `.claude/rules/` file, or a correction has come up twice. What belongs in each file versus a skill, hook or setting, and how to keep it short and current. |
 
 ## Quality gate
 
@@ -35,11 +37,14 @@ Instructions alone drift over a long session; these pieces check the work instea
 | Piece | What it does |
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) | Always-loaded working agreement: what "done" means, comment and module-size rules, and the report format (ending in a `Not verified:` line). |
-| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests, comments, dead code. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since. |
+| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests that cannot fail or pass only locally, comments, dead code. Severity is anchored to a nameable failing input, lows are capped, unconfirmed risks are named rather than dropped, and each review ends with a verdict saying whether a re-review is needed. Specs go to `spec-reviewer` instead. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since, and adds no new lows. |
+| [`agents/spec-reviewer.md`](agents/spec-reviewer.md) | Read-only agent that reviews a spec before it is built, against the user's request and the code it will change: testable requirements, feasibility, edge cases including concurrent workers, domain rules with independent worked examples, figures a model would have to compute, data sources, wiring. Same severity, unconfirmed-risk and verdict format as `diff-reviewer`. Runs on Sonnet, since design gaps are where Haiku reviews were weakest. `spec-writing` calls it before tests are written; the Stop hook ignores it, so a spec review never counts as a code review. |
 | [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
 
-devgate only judges lines the session added; changes already uncommitted when the
-session started are left alone. Checks are detected from the repo's own config
+devgate's style rules and review only judge lines the session added; changes
+already uncommitted when the session started are left alone. Linters and type
+checkers report only on changed files, but pytest runs the whole suite, so a test
+that already fails blocks every turn that touches Python. Checks are detected from the repo's own config
 (ruff, pyright, mypy and pytest, run through `uv`/`poetry` when locked), so a
 repository without them simply runs none. Only code and config lines count toward
 review; Markdown and other prose don't. After three consecutive blocks it lets
@@ -78,7 +83,7 @@ The repository mirrors the layout of a `.claude/` directory:
 ```text
 CLAUDE.md               → ~/.claude/CLAUDE.md
 skills/<name>/SKILL.md  → ~/.claude/skills/<name>/SKILL.md
-agents/diff-reviewer.md → ~/.claude/agents/diff-reviewer.md
+agents/*.md             → ~/.claude/agents/
 hooks/                  → ~/.claude/hooks/
 settings.example.json   → merge into ~/.claude/settings.json
 ```
