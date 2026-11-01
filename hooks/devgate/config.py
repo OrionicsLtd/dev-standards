@@ -50,6 +50,8 @@ class Config:
     size_growth: int = 20
     size_exempt: tuple[str, ...] = ("tests/*", "*/tests/*", "test_*", "*_test.*", "*.md")
     review_threshold: int = 200
+    # Seconds after which a review that started but never reported is treated as abandoned.
+    review_expiry: int = 3600
     banned: tuple[str, ...] = BANNED
     max_blocks: int = 3
     timeout: int = 300

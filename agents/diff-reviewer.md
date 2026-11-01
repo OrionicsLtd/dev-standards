@@ -1,6 +1,6 @@
 ---
 name: diff-reviewer
-description: Independent pre-report review of the uncommitted change. Reads the diff cold (no session context) against the user's request and any spec, hunts the defects that usually slip through — stale docs, unwired features, fixes applied to one of several sibling paths, edge cases, missing tests, comment noise — and returns only findings it confirmed in the code. Never edits. Run it in the foreground before reporting work as done; the Stop hook asks for it on larger changes.
+description: Independent pre-report review of the uncommitted change. Reads the diff cold (no session context) against the user's request and any spec, hunts the defects that usually slip through — stale docs, unwired features, fixes applied to one of several sibling paths, edge cases, missing tests, comment noise — and returns only findings it confirmed in the code. Never edits. Run it before reporting work as done; the Stop hook asks for it on larger changes.
 tools: Read, Grep, Glob, Bash
 model: haiku
 effort: high

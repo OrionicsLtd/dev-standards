@@ -17,11 +17,13 @@ EVIDENCE = re.compile(r"^\W*(not verified|unverified)\b", re.IGNORECASE | re.MUL
 @dataclass(frozen=True)
 class Decision:
     """`reason` blocks the stop and goes to Claude; `notice` is shown to the user; `checked` is the
-    code fingerprint the checks passed at, if they ran and passed."""
+    code fingerprint the checks passed at, if they ran and passed; `settled` is false while the
+    verdict waits on a running review, so the same change is judged again once it reports."""
 
     reason: str = ""
     notice: str = ""
     checked: str = ""
+    settled: bool = True
 
 
 def code_fingerprint(snap: Snapshot, config: Config) -> str:
@@ -65,9 +67,9 @@ def _review_request(pending: Counter[str], snap: Snapshot, config: Config) -> st
     lines = [
         f"{sum(pending.values())} added lines have not been independently reviewed "
         f"({', '.join(paths[:8])}{' …' if len(paths) > 8 else ''}).",
-        f"Run the `{REVIEWER}` agent in the foreground. Give it the user's request in their words "
-        "and the path of any spec or design doc this work implements. Fix what it confirms, or say "
-        "in your report why a finding does not apply.",
+        f"Run the `{REVIEWER}` agent. Give it the user's request in their words and the path of "
+        "any spec or design doc this work implements. Fix what it confirms, or say in your report "
+        "why a finding does not apply.",
     ]
     if notes:
         lines.append("Ask it to look hard at these comment-heavy files: " + "; ".join(notes))
@@ -86,9 +88,17 @@ def _summary(results: list[checks.Result], candidates: list[str]) -> str:
 
 
 def evaluate(
-    root: Path, snap: Snapshot, session: state.Session, config: Config, message: str
+    root: Path,
+    snap: Snapshot,
+    session: state.Session,
+    config: Config,
+    message: str,
+    reviewing: bool,
 ) -> Decision:
-    """Return whether the turn may end; checks re-run only when code changed since they passed."""
+    """Return whether the turn may end; checks re-run only when code changed since they passed.
+
+    While a review is running the turn may end without a report: the reviewer's report starts a
+    new turn, and the change is judged in full at its end."""
     if snap.fingerprint == session.passed or not own_lines(snap, session, config):
         return Decision()
     fingerprint = code_fingerprint(snap, config)
@@ -106,6 +116,10 @@ def evaluate(
     grown = style.grown(snap.files, lengths, config)
     state.note_oversized(root, {path: length for path, length, _ in grown})
     candidates = style.growing(snap.files, lengths, config)
+    if reviewing:
+        waiting = f"devgate: `{REVIEWER}` is still running; the report is checked once it is back."
+        notice = "\n".join(filter(None, [_summary(results, candidates), waiting]))
+        return Decision(notice=notice, checked=fingerprint, settled=False)
     pending = unreviewed(root, snap, session, config)
     if sum(pending.values()) >= config.review_threshold:
         reason = _review_request(pending, snap, config)

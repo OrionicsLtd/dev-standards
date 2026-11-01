@@ -2,10 +2,17 @@
 
 import json
 import sys
+import time
+from collections import Counter
 from pathlib import Path
 
 from . import config, gate, state
 from .diff import added_lines, find_root, snapshot
+
+
+def _change(root: Path, settings: config.Config) -> Counter[str]:
+    """Added lines of the change as it stands that count toward review."""
+    return added_lines(snapshot(root).files, settings.review_suffixes)
 
 
 def _session_start(root: Path, event: dict) -> dict:
@@ -13,7 +20,7 @@ def _session_start(root: Path, event: dict) -> dict:
     show the split backlog so oversized files stay in view without blocking any turn."""
     settings = config.load(root)
     if state.load_session(root, event["session_id"]) is None:
-        baseline = added_lines(snapshot(root).files, settings.review_suffixes)
+        baseline = _change(root, settings)
         state.save_session(root, event["session_id"], state.Session(baseline=dict(baseline)))
     backlog = _current_backlog(root, settings.max_lines)
     if not backlog:
@@ -40,11 +47,27 @@ def _current_backlog(root: Path, max_lines: int) -> list[tuple[str, dict]]:
     return sorted(entries.items(), key=lambda kv: -kv[1]["lines"])
 
 
-def _subagent_stop(root: Path, event: dict) -> dict:
-    """Mark the current change as reviewed once the reviewer has reported."""
-    if event.get("agent_type") == gate.REVIEWER and event.get("last_assistant_message"):
+def _review_start(root: Path, event: dict) -> dict:
+    """Record the change a background reviewer was launched on, so edits made while it runs stay
+    unreviewed. A foreground reviewer holds the session until it reports, so it needs no record."""
+    response = event.get("tool_response")
+    launched = isinstance(response, dict) and response.get("status") == "async_launched"
+    if launched and event.get("tool_input", {}).get("subagent_type") == gate.REVIEWER:
         settings = config.load(root)
-        state.save_reviewed(root, added_lines(snapshot(root).files, settings.review_suffixes))
+        state.start_review(root, response["agentId"], _change(root, settings), time.time())
+    return {}
+
+
+def _subagent_stop(root: Path, event: dict) -> dict:
+    """Add the lines the reviewer was given to the reviewed set. A reviewer may end on a tool call
+    rather than text, so its final message is not required. Without a launch record (a foreground
+    run, or no PostToolUse hook) the change as it stands now is what it saw."""
+    if event.get("agent_type") == gate.REVIEWER:
+        settings = config.load(root)
+        current = _change(root, settings)
+        agent_id = event.get("agent_id", "")
+        seen = state.finish_review(root, agent_id, time.time(), settings.review_expiry)
+        state.stamp_reviewed(root, current if seen is None else seen, current)
     return {}
 
 
@@ -60,7 +83,9 @@ def _stop(root: Path, event: dict) -> dict:
         baseline = dict(added_lines(snap.files, settings.review_suffixes))
         state.save_session(root, event["session_id"], state.Session(baseline, snap.fingerprint))
         return {}
-    decision = gate.evaluate(root, snap, session, settings, event.get("last_assistant_message", ""))
+    message = event.get("last_assistant_message", "")
+    reviewing = state.reviewing(root, time.time(), settings.review_expiry)
+    decision = gate.evaluate(root, snap, session, settings, message, reviewing)
     session.checked = decision.checked or session.checked
     if decision.reason and session.blocks < settings.max_blocks:
         session.blocks += 1
@@ -69,12 +94,18 @@ def _stop(root: Path, event: dict) -> dict:
     notice = decision.notice
     if decision.reason:
         notice = f"devgate: gave up after {session.blocks} attempts; still open:\n{decision.reason}"
-    session.passed, session.blocks = snap.fingerprint, 0
+    if decision.settled:
+        session.passed, session.blocks = snap.fingerprint, 0
     state.save_session(root, event["session_id"], session)
     return {"systemMessage": notice} if notice else {}
 
 
-HANDLERS = {"stop": _stop, "session-start": _session_start, "subagent-stop": _subagent_stop}
+HANDLERS = {
+    "stop": _stop,
+    "session-start": _session_start,
+    "review-start": _review_start,
+    "subagent-stop": _subagent_stop,
+}
 
 
 def main(argv: list[str]) -> int:

@@ -4,8 +4,11 @@ Reviewed lines are shared by every session in the worktree; the baseline, the la
 fingerprint and the block count belong to one session.
 """
 
+import fcntl
 import json
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
@@ -53,9 +56,49 @@ def reviewed(root: Path) -> Counter[str]:
     return Counter(_read(directory(root) / "reviewed.json"))
 
 
-def save_reviewed(root: Path, lines: Counter[str]) -> None:
-    """Record the added lines a reviewer has just seen."""
-    (directory(root) / "reviewed.json").write_text(json.dumps(dict(lines)))
+@contextmanager
+def _updating(root: Path, name: str) -> Iterator[dict]:
+    """Yield a state file's contents for update, then write them back. Parallel subagents fire their
+    hooks concurrently, so the update holds a lock and the write replaces the file atomically."""
+    folder = directory(root)
+    with (folder / f"{name}.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        data = _read(folder / name)
+        yield data
+        scratch = folder / f"{name}.tmp"
+        scratch.write_text(json.dumps(data))
+        scratch.replace(folder / name)
+
+
+def stamp_reviewed(root: Path, seen: Counter[str], current: Counter[str]) -> None:
+    """Add the lines a reviewer saw to the reviewed set, keeping only lines still in the change.
+    Reviewers can report out of order, so earlier stamps are kept rather than replaced."""
+    with _updating(root, "reviewed.json") as data:
+        kept = (Counter(data) | seen) & current
+        data.clear()
+        data.update(kept)
+
+
+def start_review(root: Path, agent_id: str, lines: Counter[str], now: float) -> None:
+    """Record the change a background reviewer was launched on."""
+    with _updating(root, "reviews.json") as table:
+        table[agent_id] = {"started": now, "lines": dict(lines)}
+
+
+def reviewing(root: Path, now: float, expiry: int) -> bool:
+    """Whether a reviewer launched within `expiry` seconds has yet to report."""
+    table = _read(directory(root) / "reviews.json")
+    return any(now - entry["started"] < expiry for entry in table.values())
+
+
+def finish_review(root: Path, agent_id: str, now: float, expiry: int) -> Counter[str] | None:
+    """Return the lines this reviewer was launched on, if its launch was recorded, and forget
+    launches older than `expiry` that never reported."""
+    with _updating(root, "reviews.json") as table:
+        entry = table.pop(agent_id, None)
+        for stale in [key for key, other in table.items() if now - other["started"] >= expiry]:
+            del table[stale]
+    return Counter(entry["lines"]) if entry else None
 
 
 def backlog(root: Path) -> dict[str, dict]:

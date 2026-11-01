@@ -45,6 +45,13 @@ repository without them simply runs none. Only code and config lines count towar
 review; Markdown and other prose don't. After three consecutive blocks it lets
 the turn end and reports what is still open. State lives in `.git/devgate/`.
 
+A review counts for the change as it stood when `diff-reviewer` was launched (a
+`PostToolUse` hook on `Agent` records it, keyed by the agent's id), so edits made while
+a background review runs still need one; without that hook a review counts for the
+change as it stands when the reviewer reports. While a review is running the turn may end without a
+report; the change is judged in full once the reviewer is back. A review that never
+reports stops counting as running after `review_expiry` seconds.
+
 A file already over the limit that a change grows further does not block: it goes on
 a split backlog (`.git/devgate/oversized.json`), which every session start shows until
 the file is split back under the limit.
@@ -54,6 +61,7 @@ Override per repository in `.claude/devgate.toml`:
 ```toml
 enabled = true            # false turns the gate off for this repo
 review_threshold = 200    # unreviewed added lines before diff-reviewer is required
+review_expiry = 3600      # seconds before a review that never reported counts as abandoned
 review_suffixes = ['.py', '.ts', '.md']   # files whose added lines count; Markdown is out by default
 max_lines = 400           # file-size limit for code files
 extra_banned = ['\bTicket-\d+\b']   # more comment patterns to reject
