@@ -1,7 +1,7 @@
 """Gate state, kept inside the repository's git directory so it is never committed.
 
-Reviewed lines are shared by every session in the worktree; the baseline, the last passing
-fingerprint and the block count belong to one session.
+Reviewed lines are shared by every session in the worktree; the baseline, the lines its edits
+wrote, the last passing fingerprint and the block count belong to one session.
 """
 
 import fcntl
@@ -77,6 +77,23 @@ def stamp_reviewed(root: Path, seen: Counter[str], current: Counter[str]) -> Non
         kept = (Counter(data) | seen) & current
         data.clear()
         data.update(kept)
+
+
+def record_written(
+    root: Path, session_id: str, added: Counter[str], removed: Counter[str] | None = None
+) -> None:
+    """Count the lines one of the session's own edits added and removed. Parallel tool calls and
+    subagents of one session record at the same time."""
+    with _updating(root, f"written-{session_id}.json") as data:
+        kept = Counter(data) + added - (removed or Counter())
+        data.clear()
+        data.update(kept)
+
+
+def written(root: Path, session_id: str) -> Counter[str]:
+    """Return how many copies of each line the session's own edits wrote, keyed like
+    `diff.line_key`."""
+    return Counter(_read(directory(root) / f"written-{session_id}.json"))
 
 
 def start_review(root: Path, agent_id: str, lines: Counter[str], now: float) -> None:

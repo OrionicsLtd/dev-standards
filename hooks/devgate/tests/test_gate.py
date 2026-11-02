@@ -1,5 +1,6 @@
 """End-to-end tests: hook events against a scratch git repository."""
 
+import difflib
 import io
 import json
 import subprocess
@@ -40,15 +41,39 @@ def _fire(monkeypatch: pytest.MonkeyPatch, hook: str, repo: Path, **fields: obje
     return json.loads(out.getvalue() or "{}")
 
 
+def _write(
+    monkeypatch: pytest.MonkeyPatch, repo: Path, name: str, content: str, session_id: str = "s1"
+) -> None:
+    """Write a file the way a session's Write tool does, firing the edit hook after it."""
+    target = repo / name
+    if target.exists():
+        diff = difflib.unified_diff(target.read_text().splitlines(), content.splitlines(), n=0)
+        lines = [line for line in diff if not line.startswith(("---", "+++", "@@"))]
+        response = {"type": "update", "structuredPatch": [{"lines": lines}]}
+    else:
+        response = {"type": "create", "structuredPatch": []}
+    target.write_text(content)
+    tool_input = {"file_path": str(target), "content": content}
+    _fire(
+        monkeypatch,
+        "edit",
+        repo,
+        session_id=session_id,
+        tool_input=tool_input,
+        tool_response=response,
+    )
+
+
 def test_preexisting_changes_are_baseline(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (repo / "app.py").write_text("x = 1\n" + "".join(f"y{i} = {i}\n" for i in range(10)))
+    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
     _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     assert _fire(monkeypatch, "stop", repo, last_assistant_message="done") == {}
 
 
 def test_review_then_evidence_then_pass(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + "".join(f"y{i} = {i}\n" for i in range(10)))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + "".join(f"y{i} = {i}\n" for i in range(10)))
     first = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
     assert first["decision"] == "block" and "diff-reviewer" in first["reason"]
     _fire(monkeypatch, "subagent-stop", repo, agent_type="diff-reviewer")
@@ -56,6 +81,13 @@ def test_review_then_evidence_then_pass(repo: Path, monkeypatch: pytest.MonkeyPa
     assert "Not verified" in second["reason"]
     assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
     assert _fire(monkeypatch, "stop", repo, last_assistant_message="chat") == {}
+
+
+def _edit(monkeypatch: pytest.MonkeyPatch, repo: Path, name: str, lines: list[str]) -> None:
+    """Fire the edit hook as an Edit tool reports a change already made to the file."""
+    tool_input = {"file_path": str(repo / name)}
+    response = {"structuredPatch": [{"lines": lines}]}
+    _fire(monkeypatch, "edit", repo, tool_input=tool_input, tool_response=response)
 
 
 def _launch(
@@ -82,9 +114,9 @@ def test_lines_added_while_a_review_runs_stay_unreviewed(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 16))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 16))
     _report(monkeypatch, repo)
     reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
     assert reason.startswith("6 added lines have not been independently reviewed")
@@ -94,7 +126,7 @@ def test_a_running_review_lets_the_turn_end_until_it_reports(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo)
     waiting = _fire(monkeypatch, "stop", repo, last_assistant_message="review started")
     assert "decision" not in waiting and "still running" in waiting["systemMessage"]
@@ -109,7 +141,7 @@ def test_an_abandoned_review_stops_counting_as_running(
     config = "checks = []\nreview_threshold = 5\nreview_expiry = 0\n"
     (repo / ".claude/devgate.toml").write_text(config)
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo)
     reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
     assert "diff-reviewer" in reply["reason"]
@@ -121,9 +153,9 @@ def test_a_review_outliving_the_expiry_still_counts_for_its_launch(
     config = "checks = []\nreview_threshold = 5\nreview_expiry = 0\n"
     (repo / ".claude/devgate.toml").write_text(config)
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 16))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 16))
     _report(monkeypatch, repo)
     reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
     assert reason.startswith("6 added lines have not been independently reviewed")
@@ -133,9 +165,9 @@ def test_each_report_stamps_its_own_launch_in_any_order(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo, agent_id="early")
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 16))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 16))
     _launch(monkeypatch, repo, agent_id="late")
     _launch(monkeypatch, repo, agent_id="never-reports")
     _report(monkeypatch, repo, agent_id="late")
@@ -149,7 +181,7 @@ def test_foreground_and_other_launches_are_not_recorded(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _launch(monkeypatch, repo, agent="Explore")
     _launch(monkeypatch, repo, agent_id="fg", status="completed")
     reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
@@ -163,7 +195,7 @@ def test_a_review_launched_before_any_code_does_not_cover_later_code(
 ) -> None:
     _fire(monkeypatch, "session-start", repo)
     _launch(monkeypatch, repo)
-    (repo / "app.py").write_text("x = 1\n" + _lines(0, 10))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 10))
     _report(monkeypatch, repo)
     assert "diff-reviewer" in _fire(monkeypatch, "stop", repo, last_assistant_message="x")["reason"]
 
@@ -186,14 +218,14 @@ def test_concurrent_launches_and_reports_are_all_recorded(repo: Path) -> None:
 
 def test_other_subagents_do_not_stamp(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1\n" + "".join(f"y{i} = {i}\n" for i in range(10)))
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + "".join(f"y{i} = {i}\n" for i in range(10)))
     _fire(monkeypatch, "subagent-stop", repo, agent_type="Explore", last_assistant_message="ok")
     assert "diff-reviewer" in _fire(monkeypatch, "stop", repo, last_assistant_message="x")["reason"]
 
 
 def test_style_blocks_and_gives_up_after_limit(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 1  # as requested by the user\n")
+    _write(monkeypatch, repo, "app.py", "x = 1  # as requested by the user\n")
     for _ in range(3):
         reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
         assert "app.py:1" in reply["reason"]
@@ -207,7 +239,7 @@ def test_failing_check_blocks_with_its_output(repo: Path, monkeypatch: pytest.Mo
     )
     (repo / ".claude/devgate.toml").write_text(config)
     _fire(monkeypatch, "session-start", repo)
-    (repo / "app.py").write_text("x = 2\n")
+    _write(monkeypatch, repo, "app.py", "x = 2\n")
     reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
     assert "`lint` failed" in reply["reason"]
 
@@ -224,7 +256,7 @@ def test_growing_oversized_files_go_on_a_backlog_not_into_the_block(
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "big"], cwd=repo, check=True)
     _fire(monkeypatch, "session-start", repo)
-    (repo / "big.py").write_text(big + "".join(f"w{i} = {i}\n" for i in range(30)))
+    _write(monkeypatch, repo, "big.py", big + "".join(f"w{i} = {i}\n" for i in range(30)))
     reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
     assert "diff-reviewer" in reply["reason"] and "big.py (480" not in reply["reason"]
     # The next session is told, until the file is split.
@@ -236,8 +268,118 @@ def test_growing_oversized_files_go_on_a_backlog_not_into_the_block(
 
 def test_markdown_does_not_count_toward_review(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _fire(monkeypatch, "session-start", repo)
-    (repo / "notes.md").write_text("".join(f"line {i}\n" for i in range(50)))
+    _write(monkeypatch, repo, "notes.md", "".join(f"line {i}\n" for i in range(50)))
     assert _fire(monkeypatch, "stop", repo, last_assistant_message="done") == {}
-    (repo / "app.py").write_text("x = 1\ny = 2\n")
+    _write(monkeypatch, repo, "app.py", "x = 1\ny = 2\n")
     reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
     assert "Not verified" in reply["reason"]
+
+
+def test_lines_another_session_writes_are_not_this_sessions(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fire(monkeypatch, "session-start", repo)
+    _fire(monkeypatch, "session-start", repo, session_id="s2")
+    _write(monkeypatch, repo, "tool.py", "# as requested by the user\n" + _lines(0, 10), "s2")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message="audit done") == {}
+    reply = _fire(monkeypatch, "stop", repo, session_id="s2", last_assistant_message="done")
+    assert "tool.py:1" in reply["reason"]
+
+
+def test_a_session_is_judged_only_on_its_own_lines_in_a_shared_file(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fire(monkeypatch, "session-start", repo)
+    _fire(monkeypatch, "session-start", repo, session_id="s2")
+    _write(monkeypatch, repo, "app.py", "x = 1\n" + _lines(0, 6), "s2")
+    (repo / "app.py").write_text("x = 1\nz = 0\n" + _lines(0, 6))
+    _edit(monkeypatch, repo, "app.py", [" x = 1", "+z = 0", " y0 = 0"])
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message="done")
+    assert "Not verified" in reply["reason"]
+    reply = _fire(monkeypatch, "stop", repo, session_id="s2", last_assistant_message="done")
+    assert reply["reason"].startswith("6 added lines have not been independently reviewed")
+
+
+def test_a_rewrite_records_only_the_lines_its_patch_adds(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = "x = 1\ny0 = 0\ny1 = 1\n"
+    (repo / "app.py").write_text(content)
+    tool_input = {"file_path": str(repo / "app.py"), "content": content}
+    patch = [{"lines": [" x = 1", "-y = 0", "+y0 = 0", "+  y1 = 1  "]}]
+    response = {"type": "update", "structuredPatch": patch}
+    _fire(monkeypatch, "edit", repo, tool_input=tool_input, tool_response=response)
+    assert state.written(repo, "s1") == Counter({"app.py\0y0 = 0": 1, "app.py\0y1 = 1": 1})
+
+
+def test_edits_outside_the_repository_are_ignored(
+    repo: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = tmp_path_factory.mktemp("elsewhere") / "other.py"
+    tool_input = {"file_path": str(outside), "content": "y = 2\n"}
+    assert _fire(monkeypatch, "edit", repo, tool_input=tool_input) == {}
+    assert _fire(monkeypatch, "edit", repo, tool_input={"content": "y = 2\n"}) == {}
+    assert state.written(repo, "s1") == Counter()
+
+
+def test_concurrent_edits_are_all_recorded(repo: Path) -> None:
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda i: state.record_written(repo, "s1", Counter({f"y{i}": 1})), range(8)))
+    assert state.written(repo, "s1") == Counter({f"y{i}": 1 for i in range(8)})
+
+
+def test_checks_and_style_judge_only_this_sessions_files(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    check = """review_threshold = 999
+[[checks]]
+name = "lint"
+cmd = "sh -c 'echo $@; exit 1' sh {py}"
+"""
+    (repo / ".claude/devgate.toml").write_text(check)
+    _fire(monkeypatch, "session-start", repo)
+    _fire(monkeypatch, "session-start", repo, session_id="s2")
+    _write(monkeypatch, repo, "tool.py", "y = 2\n", "s2")
+    _write(monkeypatch, repo, "app.py", "x = 1\ny = 2  # as requested by the user\n", "s2")
+    (repo / "app.py").write_text("x = 1\nz = 0\ny = 2  # as requested by the user\n")
+    _edit(monkeypatch, repo, "app.py", [" x = 1", "+z = 0", " y = 2  # as requested by the user"])
+    reason = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)["reason"]
+    assert reason == "Fix these before finishing:\n\n`lint` failed:\napp.py"
+
+
+def test_a_session_answers_only_for_as_many_copies_as_it_wrote(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fire(monkeypatch, "session-start", repo)
+    _fire(monkeypatch, "session-start", repo, session_id="s2")
+    (repo / "app.py").write_text("x = 1\n" + "pass\n" * 7)
+    _edit(monkeypatch, repo, "app.py", [" x = 1", "+pass"])
+    reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
+    assert "Not verified" in reason
+    tool_input = {"file_path": str(repo / "app.py")}
+    response = {"structuredPatch": [{"lines": [" pass", "+pass", "+pass", "+pass"]}]}
+    _fire(monkeypatch, "edit", repo, session_id="s2", tool_input=tool_input, tool_response=response)
+    _fire(monkeypatch, "edit", repo, session_id="s2", tool_input=tool_input, tool_response=response)
+    assert state.written(repo, "s2") == Counter({"app.py\0pass": 6})
+    removal = {"structuredPatch": [{"lines": [" x = 1", "-pass"]}]}
+    _fire(monkeypatch, "edit", repo, tool_input=tool_input, tool_response=removal)
+    assert state.written(repo, "s1") == Counter()
+
+
+def test_a_write_that_changes_nothing_records_nothing(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tool_input = {"file_path": str(repo / "app.py"), "content": "x = 1\n"}
+    response = {"type": "update", "structuredPatch": []}
+    _fire(monkeypatch, "edit", repo, tool_input=tool_input, tool_response=response)
+    assert state.written(repo, "s1") == Counter()
+
+
+def test_files_with_non_ascii_names_are_gated(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (repo / "café.py").write_text("x = 1\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "café"], cwd=repo, check=True)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "café.py", "x = 1\n" + _lines(0, 10))
+    reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
+    assert reason.startswith("10 added lines have not been independently reviewed (café.py)")

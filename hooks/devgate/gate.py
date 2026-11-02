@@ -3,12 +3,12 @@
 import hashlib
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from . import checks, state, style
 from .config import Config
-from .diff import Snapshot, added_lines
+from .diff import FileDiff, Snapshot, added_lines, line_key
 
 REVIEWER = "diff-reviewer"
 EVIDENCE = re.compile(r"^\W*(not verified|unverified)\b", re.IGNORECASE | re.MULTILINE)
@@ -26,19 +26,19 @@ class Decision:
     settled: bool = True
 
 
-def code_fingerprint(snap: Snapshot, config: Config) -> str:
+def code_fingerprint(files: tuple[FileDiff, ...], config: Config) -> str:
     """Hash only the code part of the change, so doc edits don't re-run the checks."""
     digest = hashlib.sha256()
-    for file in snap.files:
+    for file in files:
         if file.path.endswith(config.code_suffixes):
             digest.update(f"{file.path}\0{file.removed}\0".encode())
             digest.update("\n".join(text for _, text in file.added).encode())
     return digest.hexdigest()
 
 
-def _lengths(root: Path, snap: Snapshot) -> dict[str, int]:
+def _lengths(root: Path, files: tuple[FileDiff, ...]) -> dict[str, int]:
     lengths = {}
-    for file in snap.files:
+    for file in files:
         try:
             lengths[file.path] = len((root / file.path).read_text().splitlines())
         except (OSError, UnicodeDecodeError):
@@ -46,24 +46,44 @@ def _lengths(root: Path, snap: Snapshot) -> dict[str, int]:
     return lengths
 
 
-def _style(snap: Snapshot, lengths: dict[str, int], config: Config) -> str:
-    findings = style.banned(snap.files, config) + style.oversized(snap.files, lengths, config)
+def _style(
+    mine: tuple[FileDiff, ...],
+    touched: tuple[FileDiff, ...],
+    lengths: dict[str, int],
+    config: Config,
+) -> str:
+    findings = style.banned(mine, config) + style.oversized(touched, lengths, config)
     return "Style rules (see CLAUDE.md):\n" + "\n".join(map(str, findings)) if findings else ""
 
 
-def own_lines(snap: Snapshot, session: state.Session, config: Config) -> Counter[str]:
-    """Added lines this session is answerable for: everything not already there when it started."""
-    return added_lines(snap.files, config.review_suffixes) - Counter(session.baseline)
+def own_lines(
+    snap: Snapshot, session: state.Session, written: Counter[str], config: Config
+) -> Counter[str]:
+    """Added lines this session is answerable for: as many copies of each as its own edits wrote,
+    less those already there when it started. Another session sharing the checkout answers for
+    its own."""
+    return (added_lines(snap.files, config.review_suffixes) - Counter(session.baseline)) & written
 
 
-def unreviewed(root: Path, snap: Snapshot, session: state.Session, config: Config) -> Counter[str]:
-    """Added lines that were neither present when the session started nor seen by a reviewer."""
-    return own_lines(snap, session, config) - state.reviewed(root)
+def _own_files(snap: Snapshot, own: Counter[str]) -> tuple[FileDiff, ...]:
+    """The changed files this session wrote to, each cut down to the lines it wrote."""
+    left = own.copy()
+    files = []
+    for file in snap.files:
+        added = []
+        for no, text in file.added:
+            key = line_key(file.path, text)
+            if left[key] > 0:
+                left[key] -= 1
+                added.append((no, text))
+        if added:
+            files.append(replace(file, added=tuple(added)))
+    return tuple(files)
 
 
-def _review_request(pending: Counter[str], snap: Snapshot, config: Config) -> str:
+def _review_request(pending: Counter[str], mine: tuple[FileDiff, ...], config: Config) -> str:
     paths = sorted({key.split("\0", 1)[0] for key in pending})
-    notes = style.dense(snap.files, config)
+    notes = style.dense(mine, config)
     lines = [
         f"{sum(pending.values())} added lines have not been independently reviewed "
         f"({', '.join(paths[:8])}{' …' if len(paths) > 8 else ''}).",
@@ -91,6 +111,7 @@ def evaluate(
     root: Path,
     snap: Snapshot,
     session: state.Session,
+    written: Counter[str],
     config: Config,
     message: str,
     reviewing: bool,
@@ -99,32 +120,36 @@ def evaluate(
 
     While a review is running the turn may end without a report: the reviewer's report starts a
     new turn, and the change is judged in full at its end."""
-    if snap.fingerprint == session.passed or not own_lines(snap, session, config):
+    own = own_lines(snap, session, written, config)
+    if snap.fingerprint == session.passed or not own:
         return Decision()
-    fingerprint = code_fingerprint(snap, config)
+    mine = _own_files(snap, own)
+    paths = {file.path for file in mine}
+    touched = tuple(file for file in snap.files if file.path in paths)
+    fingerprint = code_fingerprint(touched, config)
     results: list[checks.Result] = []
     if fingerprint != session.checked:
-        changed = tuple(file.path for file in snap.files if (root / file.path).is_file())
+        changed = tuple(sorted(path for path in paths if (root / path).is_file()))
         results = checks.run_all(config.checks, root, changed, config.timeout)
     problems = [f"`{r.name}` failed:\n{r.output}" for r in results if not r.passed]
-    lengths = _lengths(root, snap)
-    problems += filter(None, [_style(snap, lengths, config)])
+    lengths = _lengths(root, touched)
+    problems += filter(None, [_style(mine, touched, lengths, config)])
     if problems:
         return Decision(reason="Fix these before finishing:\n\n" + "\n\n".join(problems))
     # Files already oversized that grew further never block: they go on the split backlog, which
     # every session start shows, and in the notice.
-    grown = style.grown(snap.files, lengths, config)
+    grown = style.grown(touched, lengths, config)
     state.note_oversized(root, {path: length for path, length, _ in grown})
-    candidates = style.growing(snap.files, lengths, config)
+    candidates = style.growing(touched, lengths, config)
     if reviewing:
         waiting = f"devgate: `{REVIEWER}` is still running; the report is checked once it is back."
         notice = "\n".join(filter(None, [_summary(results, candidates), waiting]))
         return Decision(notice=notice, checked=fingerprint, settled=False)
-    pending = unreviewed(root, snap, session, config)
+    pending = own - state.reviewed(root)
     if sum(pending.values()) >= config.review_threshold:
-        reason = _review_request(pending, snap, config)
+        reason = _review_request(pending, mine, config)
         return Decision(reason=reason, checked=fingerprint)
-    if snap.files and not EVIDENCE.search(message):
+    if not EVIDENCE.search(message):
         return Decision(
             reason="The report must end with a `Not verified:` line naming what was not checked "
             "(or `Not verified: nothing`), after the commands run and the requirements covered.",

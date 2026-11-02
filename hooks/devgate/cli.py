@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 
 from . import config, gate, state
-from .diff import added_lines, find_root, snapshot
+from .diff import added_lines, find_root, line_keys, snapshot
 
 
 def _change(root: Path, settings: config.Config) -> Counter[str]:
@@ -45,6 +45,28 @@ def _current_backlog(root: Path, max_lines: int) -> list[tuple[str, dict]]:
             entries[path] = {**entry, "lines": lines}
     state.save_backlog(root, entries)
     return sorted(entries.items(), key=lambda kv: -kv[1]["lines"])
+
+
+def _edit(root: Path, event: dict) -> dict:
+    """Record the lines an Edit or Write adds and removes, so the session answers for its own lines
+    and not for those another session sharing the checkout adds. Shell edits are not seen."""
+    tool_input = event.get("tool_input", {})
+    try:
+        path = Path(tool_input["file_path"]).resolve().relative_to(root.resolve()).as_posix()
+    except (KeyError, ValueError):
+        return {}
+    response = event.get("tool_response") or {}
+    if response.get("type") == "create":
+        # A Write that creates a file reports an empty patch.
+        state.record_written(
+            root, event["session_id"], line_keys(path, tool_input["content"].splitlines())
+        )
+        return {}
+    lines = [line for hunk in response.get("structuredPatch", []) for line in hunk["lines"]]
+    added = line_keys(path, (line[1:] for line in lines if line.startswith("+")))
+    removed = line_keys(path, (line[1:] for line in lines if line.startswith("-")))
+    state.record_written(root, event["session_id"], added, removed)
+    return {}
 
 
 def _review_start(root: Path, event: dict) -> dict:
@@ -85,7 +107,8 @@ def _stop(root: Path, event: dict) -> dict:
         return {}
     message = event.get("last_assistant_message", "")
     reviewing = state.reviewing(root, time.time(), settings.review_expiry)
-    decision = gate.evaluate(root, snap, session, settings, message, reviewing)
+    written = state.written(root, event["session_id"])
+    decision = gate.evaluate(root, snap, session, written, settings, message, reviewing)
     session.checked = decision.checked or session.checked
     if decision.reason and session.blocks < settings.max_blocks:
         session.blocks += 1
@@ -103,6 +126,7 @@ def _stop(root: Path, event: dict) -> dict:
 HANDLERS = {
     "stop": _stop,
     "session-start": _session_start,
+    "edit": _edit,
     "review-start": _review_start,
     "subagent-stop": _subagent_stop,
 }

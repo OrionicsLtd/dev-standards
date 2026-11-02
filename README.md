@@ -41,14 +41,20 @@ Instructions alone drift over a long session; these pieces check the work instea
 | [`agents/spec-reviewer.md`](agents/spec-reviewer.md) | Read-only agent that reviews a spec before it is built, against the user's request and the code it will change: testable requirements, feasibility, edge cases including concurrent workers, domain rules with independent worked examples, figures a model would have to compute, data sources, wiring. Same severity, unconfirmed-risk and verdict format as `diff-reviewer`. Runs on Sonnet, since design gaps are where Haiku reviews were weakest. `spec-writing` calls it before tests are written; the Stop hook ignores it, so a spec review never counts as a code review. |
 | [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
 
-devgate's style rules and review only judge lines the session added; changes
-already uncommitted when the session started are left alone. Linters and type
-checkers report only on changed files, but pytest runs the whole suite, so a test
-that already fails blocks every turn that touches Python. Checks are detected from the repo's own config
-(ruff, pyright, mypy and pytest, run through `uv`/`poetry` when locked), so a
-repository without them simply runs none. Only code and config lines count toward
-review; Markdown and other prose don't. After three consecutive blocks it lets
-the turn end and reports what is still open. State lives in `.git/devgate/`.
+devgate's style rules and review only judge lines the session wrote with its own
+Edit and Write calls (a `PostToolUse` hook on `Edit|MultiEdit|Write` records them,
+its subagents' included; without that hook the gate judges nothing). Changes
+already uncommitted when the session started, and lines another session sharing
+the checkout writes, are left alone, so a session that only runs commands and
+edits no code is never gated. Edits made through the shell (`sed -i`, generators)
+are not seen. Linters and type checkers report only on the files the session wrote
+to, but pytest runs the whole suite, so a test that already fails blocks every
+turn that touches Python. Checks are detected from the repo's own config (ruff,
+pyright, mypy and pytest, run through `uv`/`poetry` when locked), so a repository
+without them simply runs none. Only code and config lines count toward review or
+need a `Not verified:` line; Markdown and other prose don't. After three
+consecutive blocks it lets the turn end and reports what is still open. State
+lives in `.git/devgate/`.
 
 A review counts for the change as it stood when `diff-reviewer` was launched (a
 `PostToolUse` hook on `Agent` records it, keyed by the agent's id), so edits made while
@@ -102,7 +108,8 @@ cp -n CLAUDE.md ~/.claude/CLAUDE.md   # -n keeps an existing one; merge by hand 
 
 `cp -R` merges into existing directories and overwrites same-named files. For the
 quality gate, also merge the `hooks` block of
-[`settings.example.json`](settings.example.json) into `~/.claude/settings.json`, and
+[`settings.example.json`](settings.example.json) into `~/.claude/settings.json` (again
+after each update, since a missing entry silently disables part of the gate), and
 start a new session (agents load at session start). The gate needs `python3` 3.12
 or newer on `PATH`; run its tests with
 `cd hooks && uv run --no-project --with pytest pytest`.

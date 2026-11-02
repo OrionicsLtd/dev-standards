@@ -4,6 +4,7 @@ import hashlib
 import re
 import subprocess
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,7 +92,12 @@ def _untracked(root: Path) -> list[FileDiff]:
 def snapshot(root: Path) -> Snapshot:
     """Capture tracked changes against HEAD plus untracked files."""
     try:
-        tracked = git(root, "diff", "HEAD", "-U0", "--no-color", "--no-ext-diff", "--no-renames")
+        # Unquoted, a non-ASCII path matches the path an edit names.
+        tracked = git(
+            root,
+            *("-c", "core.quotePath=false", "diff", "HEAD", "-U0"),
+            *("--no-color", "--no-ext-diff", "--no-renames"),
+        )
     except subprocess.CalledProcessError:
         tracked = ""  # no commits yet: everything is untracked
     files = parse(tracked) + _untracked(root)
@@ -103,12 +109,20 @@ def snapshot(root: Path) -> Snapshot:
     return Snapshot(tuple(files), digest.hexdigest())
 
 
+def line_key(path: str, text: str) -> str:
+    """Identify a line by its file and content, so it survives being moved within the file."""
+    return f"{path}\0{text.strip()}"
+
+
+def line_keys(path: str, lines: Iterable[str]) -> Counter[str]:
+    """Count the non-blank lines, keyed by path and content."""
+    return Counter(line_key(path, text) for text in lines if text.strip())
+
+
 def added_lines(files: tuple[FileDiff, ...], suffixes: tuple[str, ...]) -> Counter[str]:
     """Count non-blank added lines, keyed by path and content, in files with these suffixes."""
-    return Counter(
-        f"{file.path}\0{text.strip()}"
-        for file in files
-        if file.path.endswith(suffixes)
-        for _, text in file.added
-        if text.strip()
-    )
+    counts: Counter[str] = Counter()
+    for file in files:
+        if file.path.endswith(suffixes):
+            counts.update(line_keys(file.path, (text for _, text in file.added)))
+    return counts

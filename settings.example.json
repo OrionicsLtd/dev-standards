@@ -24,6 +24,16 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$HOME/.claude/hooks/run_devgate.py\" edit",
+            "timeout": 30
+          }
+        ]
+      },
+      {
         "matcher": "Agent",
         "hooks": [
           {
