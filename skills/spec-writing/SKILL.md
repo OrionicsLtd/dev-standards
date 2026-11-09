@@ -32,12 +32,13 @@ order within the spec, or a temporary companion folded back into it once built.
    "given X, the command does Y". Include the failure behaviour, not just the
    happy path.
 5. **Acceptance tests** — for each requirement, the test that proves it: input,
-   expected output, and the test's name. Work expected values out independently
-   of the code (the arithmetic, or a hand-checked example). Add **properties**
+   expected output, the test's name and its level (unit, or integration
+   when the requirement changes what an entry point accepts or does). Work
+   expected values out independently of the code (the arithmetic, or a hand-checked example). Add **properties**
    where they exist (round-trip, idempotence, ordering, conservation, "never more
    than N") — they become property-based tests. Every acceptance test must run
    offline and free: mock or record any paid model or API call. The rules for
-   good tests are in `coding-standards`.
+   good tests are in `testing`.
 6. **Edge cases** — empty, missing, duplicate, boundary, malformed, concurrent
    (including parallel agents or workers writing the same files). Each one either
    maps to a requirement or is explicitly out of scope.

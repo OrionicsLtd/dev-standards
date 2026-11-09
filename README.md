@@ -1,7 +1,7 @@
 # dev-standards
 
 Orionics Ltd's engineering standards, packaged for [Claude Code](https://claude.com/claude-code).
-Skills encode reusable working practices (coding standards, context hygiene,
+Skills encode reusable working practices (coding standards, testing, context hygiene,
 dependency safety, clarifying ambiguity, writing specs, keeping docs and
 CLAUDE.md files current, and handling security advisories) that Claude loads automatically when a task matches their
 description. Alongside them, a quality gate (hooks, a reviewer agent and a
@@ -28,6 +28,7 @@ details.
 | [`lean-context`](skills/lean-context/SKILL.md) | Exploring, understanding, or debugging a codebase. Scout with search, read only the slices you need, and keep the context window lean. |
 | [`security-advisories`](skills/security-advisories/SKILL.md) | Checking a repo, its runtimes or this machine for known vulnerabilities, triaging security news against what is actually used, and fixing with the smallest upgrade that contains the fix. Uses only free live sources (OSV via `osv-scanner`, CISA's exploited-vulnerability catalog, EPSS, release indexes). |
 | [`spec-writing`](skills/spec-writing/SKILL.md) | Writing a spec or design doc, or starting work big enough to need one. Numbered requirements, each with an acceptance test written before the implementation, the domain rules and data sources the change depends on, and the wiring and docs it must touch. The spec is reviewed before its tests are written. |
+| [`testing`](skills/testing/SKILL.md) | Writing, changing or reviewing tests, or choosing a spec's acceptance tests. Unit tests on the pure core, integration tests through the real entry point with fakes only at the I/O edge, no end-to-end tests against live services. |
 | [`writing-claude-md`](skills/writing-claude-md/SKILL.md) | Creating, editing or trimming a CLAUDE.md, AGENTS.md or `.claude/rules/` file, or a correction has come up twice. What belongs in each file versus a skill, hook or setting, and how to keep it short and current. |
 
 ## Quality gate
@@ -37,7 +38,7 @@ Instructions alone drift over a long session; these pieces check the work instea
 | Piece | What it does |
 | --- | --- |
 | [`CLAUDE.md`](CLAUDE.md) | Always-loaded working agreement: what "done" means, comment and module-size rules, and the report format (ending in a `Not verified:` line). |
-| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests that cannot fail or pass only locally, comments, dead code. Severity is anchored to a nameable failing input, lows are capped, unconfirmed risks are named rather than dropped, and each review ends with a verdict saying whether a re-review is needed. Specs go to `spec-reviewer` instead. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since, and adds no new lows. |
+| [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests that cannot fail, pass only locally, mock the repo's own modules or leave an entry-point change without an integration test, comments, dead code. Severity is anchored to a nameable failing input, lows are capped, unconfirmed risks are named rather than dropped, and each review ends with a verdict saying whether a re-review is needed. Specs go to `spec-reviewer` instead. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since, and adds no new lows. |
 | [`agents/spec-reviewer.md`](agents/spec-reviewer.md) | Read-only agent that reviews a spec before it is built, against the user's request and the code it will change: testable requirements, feasibility, edge cases including concurrent workers, domain rules with independent worked examples, figures a model would have to compute, data sources, wiring. Same severity, unconfirmed-risk and verdict format as `diff-reviewer`. Runs on Sonnet, since design gaps are where Haiku reviews were weakest. `spec-writing` calls it before tests are written; the Stop hook ignores it, so a spec review never counts as a code review. |
 | [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
 

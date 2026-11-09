@@ -1,4 +1,4 @@
-"""End-to-end tests: hook events against a scratch git repository."""
+"""Integration tests: hook events against a scratch git repository."""
 
 import difflib
 import io

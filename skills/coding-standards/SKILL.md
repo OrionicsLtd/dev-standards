@@ -133,28 +133,13 @@ own idiom — no FP libraries, monad stacks or point-free tricks.
   conditions, and catch at the boundary.
 - **Composition.** Small functions combined; comprehensions and generators over
   index loops; split a function rather than add a boolean mode flag.
-- **Laws, then tests.** State the properties an API must keep (round-trip,
-  idempotence, ordering, conservation) and test them with property-based tests
-  (Hypothesis in Python) alongside examples.
+- **Laws first.** State the properties an API must keep (round-trip,
+  idempotence, ordering, conservation); `testing` turns them into
+  property-based tests.
 
 ## Tests
 
-A test earns its place by failing when the behaviour it covers breaks.
-
-- **Watch it fail first.** Write the test before the code and run it: it must fail
-  for the right reason. For a bug fix, revert the fix once and see the test fail.
-- **Test behaviour, not wiring.** Assert what a caller can observe through the real
-  entry point — return values, CLI output, files written — not private helpers or
-  the wording of prompts and docs.
-- **Derive expected values independently.** Write the arithmetic in the test
-  (`1000 + 300 - 75 - 100`) or use a hand-checked worked example; never compute
-  the expectation with the code under test or copy numbers from a run.
-- **No tests that cannot fail:** `is not None` or type-only asserts, a pure function
-  called twice to prove determinism.
-- **A clean checkout passes the suite.** Tests never read gitignored, hand-kept or
-  live data, the network or the clock; use committed fixtures and recorded
-  responses. A check against real data is a script, or a test that skips with a
-  reason when the data is absent and has an offline counterpart.
+Write them with the `testing` skill.
 
 ## Keep the diff minimal and clean
 

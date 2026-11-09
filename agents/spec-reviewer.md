@@ -16,7 +16,7 @@ The caller gives you the user's request (in their words) and the spec's path. Re
 
 Check the spec against the code it will change, not only against its own text.
 
-1. **Testable requirements.** Each requirement is one observable behaviour, failure behaviour included, with a named acceptance test stating input and expected output.
+1. **Testable requirements.** Each requirement is one observable behaviour, failure behaviour included, with a named acceptance test stating input, expected output and level (unit: the pure core; integration: through the real entry point). A requirement that changes what an entry point accepts or does (a command, flag, step or output) has an integration test, not only unit tests.
 2. **Feasibility.** Every function, module, command, file or field the spec builds on exists as described (grep it), and the interface fits the callers it names.
 3. **Edge cases.** Empty, duplicate, boundary, malformed and concurrent use are covered — including parallel agents or workers writing the same files.
 4. **Domain rules.** Each limit, formula, threshold or external fact maps to a requirement, to every code path that must apply it, and to a test whose expected value is worked out independently of the code.
