@@ -12,6 +12,18 @@ CODE_SUFFIXES = (".py", ".pyi", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".so
 # Prose is left out: docs and specs can be long, and the reviewer reaches the ones a code change
 # makes stale through the code, not by reading every prose diff.
 REVIEW_SUFFIXES = (*CODE_SUFFIXES, ".toml", ".yaml", ".yml")
+# fnmatch's `*` also matches `/`, so a `*/` glob covers any depth.
+TEST_GLOBS = (
+    "tests/*",
+    "*/tests/*",
+    "test_*",
+    "*/test_*",
+    "*_test.*",
+    "conftest.py",
+    "*/conftest.py",
+    "*.test.*",
+    "*.spec.*",
+)
 
 # Comments and docstrings must read as if they were always part of the codebase: no planning
 # vocabulary and no conversation.
@@ -48,7 +60,7 @@ class Config:
     checks: tuple[Check, ...] = ()
     max_lines: int = 400
     size_growth: int = 20
-    size_exempt: tuple[str, ...] = ("tests/*", "*/tests/*", "test_*", "*_test.*", "*.md")
+    size_exempt: tuple[str, ...] = TEST_GLOBS + ("*.md",)
     review_threshold: int = 200
     # Seconds after which a review that started but never reported is treated as abandoned.
     review_expiry: int = 3600

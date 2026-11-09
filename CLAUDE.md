@@ -17,7 +17,7 @@ When a choice could reasonably go more than one way, or an assumption about a li
 
 - Production quality: code a senior reviewer approves without comments. Match the surrounding idiom.
 - Comments state what the code cannot: a reason, a constraint, a gotcha. Never history ("now", "previously"), never plans, phases, work packages, specs sections, reviews or this conversation. No section banners. When in doubt, delete the comment.
-- Files stay under ~400 lines; split a module along its seams before it crosses that. A new concept gets its own module in the right package, not a growing script.
+- Files stay under ~400 lines (tests excepted); split a module along its seams before it crosses that. A new concept gets its own module in the right package, not a growing script.
 - Reuse before adding; the smallest diff that does the job; no dead code, no unused parameters, no magic numbers.
 - Functional core, imperative shell: pure functions over immutable data for logic; I/O at the edges. Details in the `coding-standards` skill.
 

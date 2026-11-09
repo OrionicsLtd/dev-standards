@@ -5,7 +5,8 @@ description: >-
   editing code, adding a dependency, creating a new module, organising packages,
   or running quality checks — trigger on any file edit, package install, or review
   of code structure. Keep modules small and focused, reuse before adding, name
-  things professionally, type-hint and document every function, comment the WHY
+  things professionally, type-hint and document every function (tests relax
+  size, names and docstrings, not type hints; see `testing`), comment the WHY
   not the what, use the repo's existing tooling (uv/poetry, ruff etc for Python),
   and lint after every change. Aim for the smallest change that reads like the surrounding code.
 ---
@@ -36,9 +37,10 @@ Don't introduce new tools — find what the repo already uses and use it:
 
 ## Small, focused modules
 
-- Aim for **under ~200 lines per file**; **400 is the hard limit** (the devgate Stop hook
-  blocks a change that pushes a file past it). A file past 200 is usually doing too
-  much — split it along its natural seams. When the pieces cluster
+- Test files are exempt from both numbers here (see `testing`). Aim for **under
+  ~200 lines per file**; **400 is the hard limit** (the devgate Stop hook blocks a
+  change that pushes a file past it). A file past 200 is usually doing too much —
+  split it along its natural seams. When the pieces cluster
   around one theme, promote them into a subpackage (a directory with `__init__.py`).
   A long file is a smell that a concept is hiding inside another.
 - Prefer nesting over a flat pile. A new module belongs in a themed subpackage
@@ -79,6 +81,7 @@ Names are the cheapest documentation — spend care on them.
 
 - **Functions: short, ~3 words max.** If you need more, the function is usually
   doing too much — split it. (`parse_row`, not `parse_row_and_validate_and_store`.)
+  Test names are the exception: as long as the behaviour they state.
 - **Variables: descriptive but concise** — `pending_rows`, not `pr` and not
   `the_list_of_pending_rows`.
 - **Classes: noun phrases** — `BankParser`, `MerchantMapping`, `ParsedTransaction`.
@@ -90,7 +93,8 @@ Names are the cheapest documentation — spend care on them.
   checkable documentation and catch whole classes of bugs.
 - Give each function a **one-line description** of what it does; **docstrings on
   public functions and classes** (a single line is fine when a single line says it).
-  Skip docstrings on trivial private helpers whose name already says everything.
+  Skip docstrings on trivial private helpers and tests whose name already says
+  everything.
 
 ## Comments
 

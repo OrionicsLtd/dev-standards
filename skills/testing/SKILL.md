@@ -60,3 +60,14 @@ description: >-
   table-driven cases (pytest's `parametrize`) rather than a loop.
 - **Layout follows the repo.** Where there is none, keep integration tests in their
   own directory so each level can run alone.
+
+## Relaxed for tests
+
+`coding-standards` applies, except:
+
+- No file-size limit. devgate skips anything under `tests/` or a `test_*` file or
+  directory at any depth, plus `*_test.*`, `*.test.*`, `*.spec.*` and `conftest.py`
+  (pytest's convention, so a production `test_mode.py` is skipped too). Split a file by the behaviour
+  under test once it is hard to navigate.
+- Test names are as long as the behaviour they state; no docstring when the name
+  says it all.

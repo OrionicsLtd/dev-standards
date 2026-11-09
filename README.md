@@ -40,7 +40,7 @@ Instructions alone drift over a long session; these pieces check the work instea
 | [`CLAUDE.md`](CLAUDE.md) | Always-loaded working agreement: what "done" means, comment and module-size rules, and the report format (ending in a `Not verified:` line). |
 | [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | Read-only agent that reviews the uncommitted diff without the session's context, against the user's request and any spec. Its checklist is ordered by how often each defect slipped through in practice: stale docs, edge cases, unwired features and missed sibling paths, spec coverage, tests that cannot fail, pass only locally, mock the repo's own modules or leave an entry-point change without an integration test, comments, dead code. Severity is anchored to a nameable failing input, lows are capped, unconfirmed risks are named rather than dropped, and each review ends with a verdict saying whether a re-review is needed. Specs go to `spec-reviewer` instead. Runs on Haiku at high effort to keep reviews cheap; a re-review checks the earlier findings and only the files changed since, and adds no new lows. |
 | [`agents/spec-reviewer.md`](agents/spec-reviewer.md) | Read-only agent that reviews a spec before it is built, against the user's request and the code it will change: testable requirements, feasibility, edge cases including concurrent workers, domain rules with independent worked examples, figures a model would have to compute, data sources, wiring. Same severity, unconfirmed-risk and verdict format as `diff-reviewer`. Runs on Sonnet, since design gaps are where Haiku reviews were weakest. `spec-writing` calls it before tests are written; the Stop hook ignores it, so a spec review never counts as a code review. |
-| [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
+| [`hooks/devgate`](hooks/devgate) | `Stop` hook that blocks the end of a turn while the repo's own checks fail, comments use planning or conversation wording, a change pushes a non-test file past 400 lines, a large change has not been through `diff-reviewer`, or the report lacks its `Not verified:` line. |
 
 devgate's style rules and review only judge lines the session wrote with its own
 Edit and Write calls (a `PostToolUse` hook on `Edit|MultiEdit|Write` records them,
@@ -76,6 +76,7 @@ review_threshold = 200    # unreviewed added lines before diff-reviewer is requi
 review_expiry = 3600      # seconds before a review that never reported counts as abandoned
 review_suffixes = ['.py', '.ts', '.md']   # files whose added lines count; Markdown is out by default
 max_lines = 400           # file-size limit for code files
+size_exempt = ['legacy/*']   # globs the size limit skips; replaces the default (test files, Markdown)
 extra_banned = ['\bTicket-\d+\b']   # more comment patterns to reject
 
 [[checks]]                # replaces detection; {py} expands to the changed Python files

@@ -71,6 +71,23 @@ def test_size_blocks_crossing_and_reports_legacy_growth() -> None:
     assert growing(files, lengths, config) == ["grow.py (500 lines, +30)"]
 
 
+def test_size_limit_skips_test_files_wherever_they_live() -> None:
+    tests = (
+        "tests/a.py",
+        "pkg/tests/a.py",
+        "test_a.py",
+        "src/pkg/test_a.py",
+        "pkg/a_test.go",
+        "conftest.py",
+        "pkg/conftest.py",
+        "web/a.test.ts",
+        "web/a.spec.ts",
+    )
+    files = tuple(_file(path, "x", new=True) for path in (*tests, "pkg/core.py"))
+    lengths = {f.path: 101 for f in files}
+    assert [f.path for f in oversized(files, lengths, Config(max_lines=100))] == ["pkg/core.py"]
+
+
 def test_dense_names_comment_heavy_files() -> None:
     heavy = _file("h.py", *(["# note", "x = 1"] * 12))
     light = _file("l.py", *(["x = 1"] * 24))
