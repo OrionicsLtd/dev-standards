@@ -4,10 +4,12 @@ description: >-
   Use this whenever a task is unclear, a decision could plausibly go multiple
   ways, the codebase has no obvious precedent to follow, or you find yourself
   filling in gaps the user did not specify — vague instructions, missing context,
-  multi-option decisions, or unverified assumptions about how a library, API, or
-  piece of data actually behaves. The rule: surface and resolve ambiguity (ask, or
-  verify) instead of shipping a plausible guess. The most expensive bugs are
-  correct-looking code that quietly solves the wrong problem.
+  multi-option decisions, unverified assumptions about how a library, API, or
+  piece of data actually behaves, or examples introduced by "such as", "e.g."
+  or "for example" that may be a sample rather than the full list. The rule:
+  surface and resolve ambiguity (ask, or verify) instead of shipping a
+  plausible guess. The most expensive bugs are correct-looking code that
+  quietly solves the wrong problem.
 ---
 
 # Clarify first
@@ -60,7 +62,32 @@ Silent fallback values, automatic retries, hidden defaults, "helpful" extra
 features — if the user didn't ask for it, stop and check before adding it. Quiet
 behaviour is the worst kind of surprise: it hides the real state, and the failure
 surfaces far from the cause (a silent default that masks a misconfiguration until
-prod is a classic). Make behaviour explicit, or confirm it's wanted.
+prod is a classic). Make behaviour explicit, or confirm it's wanted. More
+members of a category the user named are not extra behaviour; see below.
+
+## Examples are a sample, not the list
+
+"Reject bad input, like an empty file or a missing header" names a category by
+two of its members. Building exactly those two is overfitting: the third member
+(a truncated row, the wrong encoding) ships broken while the work looks done.
+
+- **Name the category before acting**, in one sentence: "bad input — anything
+  the parser can't read as a statement". That sentence is your assumption, stated
+  where the user can correct it.
+- **Cover the category**, keeping the user's examples in it, and list what you
+  added apart from what they named, so they can see and veto the additions.
+- **Stay inside it.** More members of a category the user named are the
+  request: build them and list them. A category they never raised is new
+  behaviour, and the section above applies.
+- **A concrete case is binding and still a sample.** "`3` should return `9`"
+  fixes the answer for `3`, and the code implements the rule behind it, never a
+  branch on `3`.
+
+Take examples as the full list only when the user closes it ("only these"),
+names one target as the whole scope ("just this file"), or shows a format or
+style to copy rather than content to cover. When you can't tell which it is,
+calibrate as in "How to ask": if the broader reading is small and reversible,
+state it and proceed; otherwise ask one question first.
 
 ## But don't re-ask what's already decided
 

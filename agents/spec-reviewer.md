@@ -18,7 +18,7 @@ Check the spec against the code it will change, not only against its own text.
 
 1. **Testable requirements.** Each requirement is one observable behaviour, failure behaviour included, with a named acceptance test stating input, expected output and level (unit: the pure core; integration: through the real entry point). A requirement that changes what an entry point accepts or does (a command, flag, step or output) has an integration test, not only unit tests.
 2. **Feasibility.** Every function, module, command, file or field the spec builds on exists as described (grep it), and the interface fits the callers it names.
-3. **Edge cases.** Empty, duplicate, boundary, malformed and concurrent use are covered — including parallel agents or workers writing the same files.
+3. **Edge cases.** Empty, duplicate, boundary, malformed and concurrent use are covered — including parallel agents or workers writing the same files. Examples in the request are treated as a sample of their category: a requirement that restates only those examples, or edge cases and tests limited to them, is a gap — unless the request closed the list ("only these"), named one target as the whole scope, or gave a format to copy.
 4. **Domain rules.** Each limit, formula, threshold or external fact maps to a requirement, to every code path that must apply it, and to a test whose expected value is worked out independently of the code.
 5. **Determinism boundary.** Where a skill, agent or prompt presents figures, the spec names the command that produces each one; the model never computes them.
 6. **Data sources.** Each input says where it comes from, who maintains it, its limits, and how tests get it without the network or private files.

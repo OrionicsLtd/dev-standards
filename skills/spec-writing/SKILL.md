@@ -30,18 +30,26 @@ order within the spec, or a temporary companion folded back into it once built.
    the types.
 4. **Requirements** — numbered `R1`, `R2`, … Each is one observable behaviour:
    "given X, the command does Y". Include the failure behaviour, not just the
-   happy path.
+   happy path. State the rule, not the user's examples of it: the examples
+   become test cases, and the requirement says what holds for every input of
+   that kind (see `clarify-first`).
 5. **Acceptance tests** — for each requirement, the test that proves it: input,
    expected output, the test's name and its level (unit, or integration
    when the requirement changes what an entry point accepts or does). Work
-   expected values out independently of the code (the arithmetic, or a hand-checked example). Add **properties**
-   where they exist (round-trip, idempotence, ordering, conservation, "never more
-   than N") — they become property-based tests. Every acceptance test must run
+   expected values out independently of the code (the arithmetic, or a
+   hand-checked example). Unless the user's examples are the full list (see
+   `clarify-first`), include cases beyond them, marked as in Edge cases, so an
+   implementation that hard-codes the examples fails. Add **properties** where
+   they exist (round-trip, idempotence, ordering, conservation, "never more than
+   N") — they become property-based tests. Every acceptance test must run
    offline and free: mock or record any paid model or API call. The rules for
    good tests are in `testing`.
 6. **Edge cases** — empty, missing, duplicate, boundary, malformed, concurrent
    (including parallel agents or workers writing the same files). Each one either
-   maps to a requirement or is explicitly out of scope.
+   maps to a requirement or is explicitly out of scope. Unless the user's
+   examples are the full list (see `clarify-first`), the cases they named are a
+   sample of their category: list the rest of it, marking each case *(user)* or
+   *(added)*, so reviewing the spec is also the user's chance to drop additions.
 7. **Data and domain** — whichever of these the change depends on:
    - *Domain rules*: each limit, formula, threshold or external fact, with its
      source, the requirements that apply it, every code path that must apply

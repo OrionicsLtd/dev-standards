@@ -52,6 +52,11 @@ description: >-
 - **Derive expected values independently.** Write the arithmetic in the test
   (`1000 + 300 - 75 - 100`) or use a hand-checked worked example; never compute
   the expectation with the code under test or copy numbers from a run.
+- **Test the rule, not the sample.** Unless the user's examples are the full
+  list (see `clarify-first`), the examples in a request or spec are some of the cases,
+  not all of them. Add cases the code was not written from (other
+  members of the category, the boundaries) or a property, so an implementation
+  that special-cases the examples fails.
 - **No tests that cannot fail:** `is not None` or type-only asserts, a pure function
   called twice to prove determinism.
 - **A clean checkout passes the suite.** Never read gitignored, hand-kept or live
