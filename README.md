@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/orionics-logo.png" alt="Orionics logo" width="96">
+</p>
+
 # dev-standards
 
 Orionics Ltd's engineering standards, packaged for [Claude Code](https://claude.com/claude-code).
