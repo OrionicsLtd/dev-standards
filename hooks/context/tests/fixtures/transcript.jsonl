@@ -1,0 +1,3 @@
+{"type": "user", "isSidechain": false}
+{"type": "assistant", "isSidechain": false, "message": {"usage": {"input_tokens": 2, "cache_creation_input_tokens": 3363, "cache_read_input_tokens": 244906, "output_tokens": 1693}}}
+{"type": "user", "isSidechain": false}

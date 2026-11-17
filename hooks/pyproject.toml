@@ -12,5 +12,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
-testpaths = ["devgate/tests"]
+testpaths = ["devgate/tests", "context/tests"]
 addopts = "-p no:cacheprovider"

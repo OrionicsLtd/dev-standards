@@ -1,0 +1,8 @@
+{
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "transcript_path": "/nonexistent/00000000-0000-0000-0000-000000000001.jsonl",
+  "cwd": "/nonexistent",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Add a --verbose flag to the CLI."
+}
