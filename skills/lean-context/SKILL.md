@@ -6,8 +6,8 @@ description: >-
   codebase, and BEFORE reading files or running commands that dump large output.
   Scout with search instead of reading whole files, delegate broad multi-file
   exploration to subagents, read only the slices you need, never re-read what's
-  already in context, filter command output, and offload intermediates to the
-  filesystem.
+  already in context, filter command output, offload intermediates to the
+  filesystem, and hand off to a new session with a written handoff.
 ---
 
 # Lean context
@@ -37,10 +37,14 @@ the **conclusion** — the file dumps never touch your window. This is the singl
 biggest lever for keeping the main thread lean; use it liberally for
 open-ended searches, and keep only the summary.
 
-## Don't re-read
+Brief it with paths, not pasted content, and say how long an answer you want. A
+read-only search can run on a cheaper model.
 
-Don't re-open files already in context, and don't re-run a search whose answer you
-already have.
+## Don't re-read or re-run
+
+Don't re-open files already in context, don't re-run a search whose answer you
+already have, and don't re-run a command (tests, lint, a build) on code that
+hasn't changed since it last ran.
 
 ## Filter output; never dump
 
@@ -71,3 +75,21 @@ As a session grows, track a short running state — what's done, what's next, ke
 decisions and values — rather than re-deriving it from the full history each turn.
 When you catch yourself scrolling back through the whole transcript to reconstruct
 context, that's the signal to distill it into a few lines instead.
+
+## Hand off to a new session
+
+- Suggest a new session at a new feature or spec, after a unit of work is
+  committed, or when the context is mostly exploration the next task doesn't
+  need. Write the handoff first.
+- Before a session stops mid-task, write the handoff to a file the next session
+  can read (a session scratchpad is not one) and give the user its path:
+  scope, decisions, status, next step, changed files, verification commands with
+  their results, and approvals still open.
+- Picking up a handoff, re-check `git status` and re-run the verification before
+  trusting it. An approval in the old conversation is not an approval now.
+
+## Guards
+
+- Where the context hooks are installed, a nudge flags a session grown long and
+  a guard refuses whole reads of long files; work as if they weren't there.
+- Where rtk is installed, it compresses shell output; filter yours anyway.
