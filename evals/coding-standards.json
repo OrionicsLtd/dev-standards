@@ -1,0 +1,55 @@
+{
+  "prompts": [
+    {
+      "prompt": "Add a helper that parses the config file.",
+      "known_collision": "writing-claude-md and dependency-safety win on 'add' and 'file'; coding-standards matches neither"
+    },
+    "Refactor this module, it's getting too big.",
+    {
+      "prompt": "Rename these functions to something more professional.",
+      "known_collision": "security-advisories wins on 'something'; coding-standards matches only 'function'"
+    },
+    {
+      "prompt": "Run the linter and fix what it reports.",
+      "known_collision": "security-advisories and testing win on 'fix'; coding-standards says 'lint', not 'linter'"
+    }
+  ],
+  "negatives": [
+    {
+      "prompt": "Make the dashboard better.",
+      "winner": "clarify-first",
+      "known_collision": "dependency-safety wins on 'make'; clarify-first shares no word with a vague request"
+    },
+    {
+      "prompt": "Add pytest to the project dependencies.",
+      "winner": "dependency-safety",
+      "known_collision": "writing-claude-md wins on 'project' over dependency-safety's 'dependency'"
+    },
+    {
+      "prompt": "Update the README after the refactor.",
+      "winner": "docs-maintenance",
+      "known_collision": "spec-writing wins on 'refactor' over docs-maintenance's 'readme'"
+    },
+    {
+      "prompt": "This test output is enormous, just show me the failures.",
+      "winner": "lean-context",
+      "known_collision": "testing wins on 'test' over lean-context's 'output'"
+    },
+    {
+      "prompt": "Is the requests version we pin affected by the new CVE?",
+      "winner": "security-advisories"
+    },
+    {
+      "prompt": "Before you build the importer, write down what it must do.",
+      "winner": "spec-writing"
+    },
+    {
+      "prompt": "Add a test that covers the empty-input case.",
+      "winner": "testing"
+    },
+    {
+      "prompt": "Add a rule to CLAUDE.md that we always use ruff.",
+      "winner": "writing-claude-md"
+    }
+  ]
+}

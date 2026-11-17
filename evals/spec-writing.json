@@ -1,0 +1,18 @@
+{
+  "prompts": [
+    "Write a spec for the new export command.",
+    "Draft a design doc for the pipeline refactor.",
+    "Plan this feature before we build it.",
+    "I need an implementation plan for the data format change."
+  ],
+  "negatives": [
+    {
+      "prompt": "Add a unit test for the date parser.",
+      "winner": "testing"
+    },
+    {
+      "prompt": "The spec no longer matches the code, fix it.",
+      "winner": "docs-maintenance"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "prompts": [
+    "Update the README after I changed the CLI flags.",
+    "The design doc is out of date with the code.",
+    {
+      "prompt": "Mark the old plan as superseded.",
+      "known_collision": "spec-writing outweighs docs-maintenance on 'plan', which both descriptions use"
+    },
+    "Is this spec still true to the code?"
+  ],
+  "negatives": [
+    {
+      "prompt": "Write a design doc for the new cache.",
+      "winner": "spec-writing"
+    }
+  ],
+  "known_pair_collisions": {
+    "spec-writing": "by design: both cover specs, design docs and plans, split by moment (writing one before code vs keeping existing ones true), which word overlap cannot see"
+  }
+}

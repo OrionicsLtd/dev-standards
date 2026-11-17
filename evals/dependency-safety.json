@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    "Bump requests to the latest version.",
+    "Add httpx to pyproject.toml.",
+    "Regenerate the lock file.",
+    "Update the Dockerfile base image."
+  ],
+  "negatives": [
+    {
+      "prompt": "Upgrade the vulnerable package to fix the CVE.",
+      "winner": "security-advisories"
+    }
+  ]
+}

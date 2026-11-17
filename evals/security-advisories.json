@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    "Is there a CVE affecting our dependencies?",
+    "Does the Node.js security release affect us?",
+    "A package we use was reported as compromised.",
+    "Audit this repo for known vulnerabilities."
+  ],
+  "negatives": [
+    {
+      "prompt": "Pin numpy to 1.26 in pyproject.toml.",
+      "winner": "dependency-safety"
+    }
+  ]
+}

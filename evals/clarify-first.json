@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    {
+      "prompt": "Add caching to the API.",
+      "known_collision": "dependency-safety wins on 'add'; clarify-first matches only 'api'"
+    },
+    {
+      "prompt": "Make the export faster, whatever works.",
+      "known_collision": "dependency-safety wins on 'make'; clarify-first shares no word with a vague request"
+    },
+    "Clean up the user model, e.g. the address fields.",
+    "I'm not sure how the library handles retries, just pick something."
+  ]
+}

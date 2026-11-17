@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    "Write tests for the retry logic.",
+    "This test is failing, here's the traceback.",
+    "Fix this bug: the total is off by one.",
+    "Add a regression test for the parser."
+  ],
+  "negatives": [
+    {
+      "prompt": "Write a spec with acceptance tests for the importer.",
+      "winner": "spec-writing"
+    }
+  ]
+}

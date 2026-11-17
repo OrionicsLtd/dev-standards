@@ -1,0 +1,14 @@
+{
+  "prompts": [
+    {
+      "prompt": "Explore the codebase and find where auth happens.",
+      "known_collision": "clarify-first wins on 'find' and 'codebase'; lean-context matches only 'codebase'"
+    },
+    {
+      "prompt": "This log is huge, find the error in it.",
+      "known_collision": "clarify-first wins on 'find' and testing on 'error'; lean-context shares no word"
+    },
+    "Hand this off to a new session.",
+    "Read the whole repository before changing anything."
+  ]
+}

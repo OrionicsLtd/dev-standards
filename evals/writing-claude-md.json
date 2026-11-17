@@ -1,0 +1,8 @@
+{
+  "prompts": [
+    "Add this to CLAUDE.md.",
+    "From now on, always run make lint before committing.",
+    "Trim our AGENTS.md, it's too long.",
+    "Remember to always use uv."
+  ]
+}
