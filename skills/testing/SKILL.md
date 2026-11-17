@@ -2,10 +2,11 @@
 name: testing
 description: >-
   Write and organise tests. Use whenever writing, changing or reviewing tests,
-  fixing a bug, or choosing the acceptance tests for a spec. Two levels: unit
-  tests on the pure core, integration tests through the real entry point with
-  fakes only at the I/O edge; no end-to-end tests against live services. Every
-  test must be able to fail and must pass on a clean checkout.
+  choosing the acceptance tests for a spec, or fixing a bug, including a pasted
+  error, traceback or failing test, or a fix that looks obvious. Two levels:
+  unit tests on the pure core, integration tests through the real entry point
+  with fakes only at the I/O edge; no end-to-end tests against live services.
+  Every test must be able to fail and must pass on a clean checkout.
 ---
 
 # Testing
@@ -24,7 +25,6 @@ description: >-
   output) gets an integration test that reaches it from the entry point.** Test
   there what only the wiring can break: parsing, step order, what is written or
   printed, exit codes, errors crossing modules. Don't re-test the units' branches.
-- A bug fix gets a test at the lowest level that reproduces it.
 - No end-to-end tests: none that touch live services, deployed systems, real
   accounts or paid APIs. They cost money, flake, and can't run on a clean
   checkout. A check against real data is a script, or a test that skips with a
@@ -41,12 +41,14 @@ description: >-
   outcomes, not on which methods were called.
 - A recorded response is a real one captured once, trimmed and scrubbed of
   secrets, and committed.
+- A crash, atomicity or rollback claim is tested by killing the process and
+  reopening the store, not by a mock or an injected exception.
 
 ## Every test
 
 - **Watch it fail first.** Write the test before the code and run it: it must fail
-  for the right reason. For a bug fix, revert the fix once and see the test fail;
-  for code that already works, break the behaviour once, see the test fail, restore.
+  for the right reason. For code that already works, break the behaviour once,
+  see the test fail, restore.
 - **Test behaviour.** Assert what a caller can observe (return values, CLI output,
   files written), not private helpers or the wording of prompts and docs.
 - **Derive expected values independently.** Write the arithmetic in the test
@@ -61,10 +63,28 @@ description: >-
   called twice to prove determinism.
 - **A clean checkout passes the suite.** Never read gitignored, hand-kept or live
   data, the network or the clock; use committed fixtures.
+- **Tests pass in any order:** no mutable state shared between them.
 - **One behaviour per test**, named for it (`test_merge_keeps_newest_entry`); use
   table-driven cases (pytest's `parametrize`) rather than a loop.
 - **Layout follows the repo.** Where there is none, keep integration tests in their
   own directory so each level can run alone.
+
+## Fixing a bug
+
+- **Reproduce it first:** a failing test at the lowest level that shows the bug,
+  written before the fix, even when the fix looks obvious. If the fix is already
+  in, revert it once and see the test fail.
+- **Decide whether the test or the code is wrong** before changing either.
+- **Name the competing explanations** and the check that tells them apart; run
+  it before choosing one.
+- **For a regression, find the commit:** `git bisect run` a wrapper around the
+  new test that exits 125 where the test cannot run, since bisect counts any
+  other exit from 1 to 127 as the bug. Leave the test untracked so every
+  checked-out commit runs it; commit it with the fix.
+- **Fix the cause, not the symptom:** no special case for the failing input, no
+  swallowed error, no retry around it.
+- **A flaky test is a bug** in the test or the code; find it, don't re-run.
+- **Remove debug instrumentation** once the test guards the fix.
 
 ## Relaxed for tests
 
