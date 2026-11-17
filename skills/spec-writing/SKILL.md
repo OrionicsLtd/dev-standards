@@ -100,9 +100,8 @@ each with its own row.
 4. Walk the Wiring list; exercise the change through its real entry point at no
    cost (dry run, fixtures, recorded responses — never a paid call).
 5. Run `diff-reviewer` with the spec path; it maps each requirement to code.
-6. If the implementation had to deviate, change the requirement itself in the
-   same change — not a note on top — and update the spec's status and the index.
-   A spec that disagrees with the code misleads the next reader.
+6. If the implementation had to deviate, fold it back into the spec in the same
+   change, as `docs-maintenance` describes.
 
 Requirement ids live in the spec only. Code, comments and test names describe
 behaviour (`test_merge_keeps_newest_entry`), never `R3` or the spec section.

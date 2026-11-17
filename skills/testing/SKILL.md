@@ -2,11 +2,11 @@
 name: testing
 description: >-
   Write and organise tests. Use whenever writing, changing or reviewing tests,
-  choosing the acceptance tests for a spec, or fixing a bug, including a pasted
-  error, traceback or failing test, or a fix that looks obvious. Two levels:
-  unit tests on the pure core, integration tests through the real entry point
-  with fakes only at the I/O edge; no end-to-end tests against live services.
-  Every test must be able to fail and must pass on a clean checkout.
+  or fixing a bug, including a pasted error, traceback or failing test, or a
+  fix that looks obvious. Two levels: unit tests on the pure core, integration
+  tests through the real entry point with fakes only at the I/O edge; no
+  end-to-end tests against live services. Every test must be able to fail and
+  must pass on a clean checkout.
 ---
 
 # Testing
