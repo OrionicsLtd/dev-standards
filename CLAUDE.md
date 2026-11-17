@@ -11,7 +11,11 @@ When a choice could reasonably go more than one way, or an assumption about a li
 - When you change a name, flag, behaviour or file, grep docs, skills, prompts and specs for the old one and update them in the same change.
 - When you fix one path, find its siblings (same pattern, same switch, same schema) and fix or rule out each.
 - Order the work: implement → lint, type-check, test → the `diff-reviewer` agent once per unit of work, waiting for its result (the Stop hook insists on larger changes) → fix what it confirms → then any expensive end-to-end verification (rebuilds, re-measurements, live runs) once, last. A re-review gets the earlier findings and the files changed since, not the whole diff. Re-review when the verdict or the Stop hook asks for one; otherwise, after two re-reviews, list what is still open in the report and stop.
-- End every report that changed code with: the commands run and their results, the requirements covered, a suggested commit message once the unit of work is reviewed and passing, and a final `Not verified:` line naming what was not checked (`Not verified: nothing` if so).
+- Brief a reviewer with the request, the spec path if any, and the evidence; never your own summary or reasons the change is right.
+- Make no commits while work is in progress.
+- Once `diff-reviewer` passes and its findings are fixed, suggest the commit, or several when the reviewed unit of work holds separate logical changes.
+- Write each commit message as `type: summary`, then a body that says why.
+- End every report that changed code with: the commands run and their results, the requirements covered, sibling paths ruled out, problems noticed but left alone, the suggested commit or commits once `diff-reviewer` has passed, and a final `Not verified:` line naming what was not checked (`Not verified: nothing` if so).
 
 ## Code
 
