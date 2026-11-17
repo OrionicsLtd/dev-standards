@@ -32,6 +32,10 @@ probabilities, and checks Node, Python and Go — installed here or pinned in
 `hot` lists what CISA added to its exploited catalog recently. If `osv-scanner`
 is missing, ask the user to `brew install osv-scanner`.
 
+Each prints a summary (counts, the five most urgent packages, or the vendors
+`hot` found) and the path of the full report: a new temp file, or `--output PATH`.
+`grep` the full report for the rows you need rather than reading it whole.
+
 Not covered by the scan, so check by hand when relevant: Foundry/Soldeer
 libraries (read the version from `foundry.lock`, `soldeer.lock` or
 `lib/<name>/package.json` and query OSV for the matching npm package, e.g.
@@ -77,8 +81,8 @@ between the installed and target versions for breaking changes before upgrading.
 | Docker | bump the base tag to the fixed patch (or pin a digest) |
 | This machine | tell the user the command for their version manager; don't change it unasked |
 
-Then: run the tests, run `scan` again and confirm the advisory is gone, and
-check the lockfile diff touches only the intended packages. Follow
+Then: run the tests, run `scan` again and confirm the advisory is gone from its
+full report, and check the lockfile diff touches only the intended packages. Follow
 `dependency-safety` for everything else — a security fix is a reason to change a
 dependency, not licence to change others.
 
