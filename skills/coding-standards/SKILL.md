@@ -34,6 +34,15 @@ Don't introduce new tools — find what the repo already uses and use it:
   etc.) — run it before considering an edit done, and run the type checker / tests
   if the repo has them. Adding a dependency is itself a real decision — keep it
   minimal (see the `dependency-safety` skill).
+- **Never silence a check to pass it.** Fix the cause; don't loosen the tool's config.
+  A justified suppression uses the comment of the tool that reports the error, names
+  the rule where the tool has codes, and gives a non-empty reason on the same line
+  (for a pytest mark, its `reason=` argument). Any other suppression is silencing:
+  - `# noqa: BLE001 - a broken gate must not wedge the session`
+  - `# pyright: ignore[reportAttributeAccessIssue] - <reason>`
+  - `# type: ignore[arg-type]  # <reason>` (mypy rejects `[code] - <reason>`)
+  - `# pragma: no cover - <reason>`
+  - `@pytest.mark.skip(reason="<reason>")`, `@pytest.mark.xfail(reason="<reason>")`
 
 ## Small, focused modules
 
@@ -63,6 +72,9 @@ Duplicated logic (three functions doing the same thing) is a maintenance trap.
   belongs in** rather than defaulting to a new file.
 - If the honest answer is "a new top-level package," the feature is probably big
   enough to deserve one — but **flag that before creating it**, don't do it silently.
+- **Build for the requirement in hand.** Reuse means code that already exists; don't
+  write ahead of need: no parameter, hook or abstraction with one caller "for later".
+  Extract a shared helper on the third repetition, not the second.
 
 ## Use config files
 
@@ -131,6 +143,8 @@ own idiom — no FP libraries, monad stacks or point-free tricks.
   exhaustiveness), not string flags and clusters of optional fields. Parse
   untrusted input once at the boundary into precise types; the core never
   re-validates.
+- **Model output is untrusted input.** Parse it against a schema at the boundary;
+  never pass it to a shell, SQL, a file path or `eval`.
 - **Total functions, errors as values.** Handle every input. Where failure is an
   expected outcome, return it in the type (a result union, an explicit `None`
   with a documented meaning); raise only for bugs and truly exceptional
