@@ -202,8 +202,7 @@ Lint:
 
 - `pyproject.toml` (new, root) — the runner devgate detects.
 - `evals/*.json`, `evals/README.md` (this file), `tests/` (new).
-- Left for the final sweep (TODO section 10): the README's Requirements section should
-  name the new suite's command.
+- The README's Requirements section names the suite's command.
 
 ## Open questions
 
