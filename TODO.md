@@ -1,11 +1,9 @@
 # Skills backlog
 
-Improvements drawn from comparing this repo with addyosmani/agent-skills. Scaffolding:
-delete this file once every item is done or dropped.
-
 Ground rules:
 
-- No new skills. Each skill stays narrow; every skill's description is loaded in every
+- Only add new skills if existing ones don't cover scope.
+- Each skill stays narrow; every skill's description is loaded in every
   session, so descriptions stay short and must not collide.
 - One section below = one session. Sections touch disjoint files so they can run in
   parallel; README rows are updated in the final sweep, not per session.
