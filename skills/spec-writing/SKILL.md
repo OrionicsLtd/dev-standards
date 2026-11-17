@@ -19,6 +19,20 @@ existing format if one exists, open it with the repo's status header, and add it
 to the specs index (see `docs-maintenance`). An implementation plan is a build
 order within the spec, or a temporary companion folded back into it once built.
 
+## Before drafting
+
+Grill the user first. Ask one question at a time, each with your best guess so
+the answer can be "yes", until the goal, the non-goals and the edge-case
+categories are settled. Skip what the request, an earlier answer or the code
+already settles (see `clarify-first`), and stop once you can predict the
+answers. Anything still unsettled goes under Open questions. If no one can
+answer, follow `clarify-first` on a user who can't be reached.
+
+If the request holds capabilities that can each be tested on their own, write
+one spec per capability. Agree the split and the build order with the user
+before drafting the first, and add the specs to the specs index in that order,
+each with its own row.
+
 ## Structure
 
 1. **Goal** — the problem, in two or three sentences, and who it is for.
@@ -59,6 +73,11 @@ order within the spec, or a temporary companion folded back into it once built.
      it (committed, gitignored, hand-kept), its limits (pagination, rate limits,
      freshness), and the recorded fixture tests use instead.
    - *Numbers*: units, rounding, decimal or float, time zone, which day's rate.
+   - *Compatibility*: for a data-format change, whether files and caches the
+     old code wrote still read, get migrated, or get rejected with a clear
+     message — a requirement, tested on an old-format fixture — and how to
+     roll back: whether the old code reads what the new code writes, and what
+     to do with those files if it doesn't.
    - *Determinism boundary*: when a skill, agent or prompt presents figures, the
      command that produces each one. The model selects, quotes and judges; it
      never computes.
