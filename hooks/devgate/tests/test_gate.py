@@ -383,3 +383,86 @@ def test_files_with_non_ascii_names_are_gated(repo: Path, monkeypatch: pytest.Mo
     _write(monkeypatch, repo, "café.py", "x = 1\n" + _lines(0, 10))
     reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
     assert reason.startswith("10 added lines have not been independently reviewed (café.py)")
+
+
+GITHUB_TOKEN = "ghp_" + "a1" * 18
+MISSING_LINT = 'checks = [{ name = "lint", cmd = "no-such-tool-xyz {py}" }]\nreview_threshold = 5\n'
+
+
+def test_secret_in_a_doc_blocks_without_running_checks(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = 'checks = [{ name = "boom", cmd = "false" }]\nreview_threshold = 5\n'
+    (repo / ".claude/devgate.toml").write_text(config)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "notes.md", f"token: {GITHUB_TOKEN}\n")
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert reply["decision"] == "block"
+    assert "notes.md:1: possible GitHub token" in reply["reason"]
+    assert GITHUB_TOKEN not in reply["reason"] and "boom" not in reply["reason"]
+
+
+def test_secret_already_present_at_start_is_not_flagged(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repo / ".env.example").write_text(f"TOKEN={GITHUB_TOKEN}\n")
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "b.py", "x = 2\n")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
+
+
+def test_session_suppression_blocks_the_stop(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (repo / "tests").mkdir()
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "tests/test_x.py", "@pytest.mark.skip\ndef test_a():\n    pass\n")
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "tests/test_x.py:1: pytest.mark.skip needs a reason" in reply["reason"]
+
+
+def test_missing_tool_blocks_until_named(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (repo / ".claude/devgate.toml").write_text(MISSING_LINT)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "b.py", "x = 2\ny = 3\n")
+    first = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert first["decision"] == "block" and "`lint`" in first["reason"]
+    linting = "Ran pytest.\nNot verified: linting"
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=linting)["decision"] == "block"
+    named = "Ran pytest.\nNot verified: lint, not installed"
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=named)
+    assert "decision" not in reply
+    assert "lint – not installed" in reply["systemMessage"]
+    _write(monkeypatch, repo, "b.py", "x = 2\ny = 3\nz = 4\n")
+    again = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "`lint`" in again["reason"]
+
+
+def test_missing_tool_keeps_checks_unrecorded(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (repo / ".claude/devgate.toml").write_text(MISSING_LINT)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "b.py", _lines(0, 10))
+    first = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "diff-reviewer" in first["reason"]
+    session = state.load_session(repo, "s1")
+    assert session is not None and session.checked == ""
+    _report(monkeypatch, repo)
+    second = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "`lint`" in second["reason"]
+
+
+def test_review_request_names_what_the_reviewer_gets(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "b.py", _lines(0, 10))
+    reason = _fire(monkeypatch, "stop", repo, last_assistant_message="done")["reason"]
+    assert "the evidence" in reason and "never your own summary" in reason
+
+
+def test_check_output_never_echoes_a_secret(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = 'checks = [{ name = "echo", cmd = "sh -c \'cat \\"$@\\"; exit 1\' sh {py}" }]\n'
+    (repo / ".claude/devgate.toml").write_text(config + "review_threshold = 5\n")
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "b.py", f'TOKEN = "{GITHUB_TOKEN}"\n')
+    reason = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)["reason"]
+    assert "`echo` failed:\n(line not shown: it holds a possible secret)" in reason
+    assert GITHUB_TOKEN not in reason

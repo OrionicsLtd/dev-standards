@@ -1,11 +1,12 @@
 """Style rules on the lines a change adds: banned comment wording, file growth, comment density."""
 
 import re
-from dataclasses import dataclass
 from fnmatch import fnmatch
 
+from . import leaks
 from .config import Config
 from .diff import FileDiff
+from .findings import Finding
 
 COMMENT_MARKERS = {".py": "#", ".pyi": "#", ".sh": "#", ".toml": "#", ".yaml": "#", ".yml": "#"}
 DEFAULT_MARKER = "//"
@@ -13,18 +14,7 @@ DOCSTRING = re.compile(r'"""|\'\'\'')
 BANNER = re.compile(r"^\s*[-=*#~]{4,}")
 DENSITY_MIN_LINES = 20
 DENSITY_LIMIT = 0.3
-
-
-@dataclass(frozen=True)
-class Finding:
-    """One rule a file breaks, located well enough to fix without searching."""
-
-    path: str
-    line: int
-    message: str
-
-    def __str__(self) -> str:
-        return f"{self.path}:{self.line}: {self.message}"
+HIDDEN = "comment wording (not shown: the line holds a possible secret)"
 
 
 def _comment(text: str, marker: str) -> str | None:
@@ -68,7 +58,8 @@ def banned(files: tuple[FileDiff, ...], config: Config) -> list[Finding]:
             if is_comment and BANNER.match(subject):
                 findings.append(Finding(file.path, line_no, "section-banner comment"))
             elif any(pattern.search(subject) for pattern in patterns):
-                findings.append(Finding(file.path, line_no, f"comment wording `{subject[:60]}`"))
+                shown = HIDDEN if leaks.kinds(subject) else f"comment wording `{subject[:60]}`"
+                findings.append(Finding(file.path, line_no, shown))
     return findings
 
 

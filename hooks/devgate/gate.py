@@ -6,12 +6,14 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from . import checks, state, style
+from . import checks, leaks, state, style, suppressions
 from .config import Config
 from .diff import FileDiff, Snapshot, added_lines, line_key
 
 REVIEWER = "diff-reviewer"
 EVIDENCE = re.compile(r"^\W*(not verified|unverified)\b", re.IGNORECASE | re.MULTILINE)
+EVERY_FILE = ("",)  # every path ends with ""
+FIX = "Fix these before finishing:\n\n"
 
 
 @dataclass(frozen=True)
@@ -52,17 +54,28 @@ def _style(
     lengths: dict[str, int],
     config: Config,
 ) -> str:
-    findings = style.banned(mine, config) + style.oversized(touched, lengths, config)
+    findings = (
+        style.banned(mine, config)
+        + style.oversized(touched, lengths, config)
+        + suppressions.unexplained(mine)
+    )
     return "Style rules (see CLAUDE.md):\n" + "\n".join(map(str, findings)) if findings else ""
 
 
+def _secrets(written: tuple[FileDiff, ...]) -> str:
+    findings = leaks.leaks(written)
+    if not findings:
+        return ""
+    return "Possible secrets (the text is not repeated here):\n" + "\n".join(map(str, findings))
+
+
 def own_lines(
-    snap: Snapshot, session: state.Session, written: Counter[str], config: Config
+    snap: Snapshot, session: state.Session, written: Counter[str], suffixes: tuple[str, ...]
 ) -> Counter[str]:
-    """Added lines this session is answerable for: as many copies of each as its own edits wrote,
-    less those already there when it started. Another session sharing the checkout answers for
-    its own."""
-    return (added_lines(snap.files, config.review_suffixes) - Counter(session.baseline)) & written
+    """Added lines this session is answerable for in files with these suffixes: as many copies of
+    each as its own edits wrote, less those already there when it started. Another session
+    sharing the checkout answers for its own."""
+    return (added_lines(snap.files, suffixes) - Counter(session.baseline)) & written
 
 
 def _own_files(snap: Snapshot, own: Counter[str]) -> tuple[FileDiff, ...]:
@@ -87,20 +100,43 @@ def _review_request(pending: Counter[str], mine: tuple[FileDiff, ...], config: C
     lines = [
         f"{sum(pending.values())} added lines have not been independently reviewed "
         f"({', '.join(paths[:8])}{' …' if len(paths) > 8 else ''}).",
-        f"Run the `{REVIEWER}` agent. Give it the user's request in their words and the path of "
-        "any spec or design doc this work implements. Fix what it confirms, or say in your report "
-        "why a finding does not apply.",
+        f"Run the `{REVIEWER}` agent. Give it the user's request in their words, the path of any "
+        "spec or design doc this work implements, and the evidence (the commands run and their "
+        "results); never your own summary or reasons the change is right. Fix what it confirms, "
+        "or say in your report why a finding does not apply.",
     ]
     if notes:
         lines.append("Ask it to look hard at these comment-heavy files: " + "; ".join(notes))
     return "\n".join(lines)
 
 
+def _mark(result: checks.Result) -> str:
+    if result.missing:
+        return "– not installed"
+    return "✓" if result.passed else "✗"
+
+
+def _name_missing(missing: list[str], unverified: str) -> str:
+    """Ask for the missing checks that the report's `Not verified` part does not name."""
+    unnamed = [
+        name
+        for name in missing
+        if not re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", unverified, re.IGNORECASE)
+    ]
+    if not unnamed:
+        return ""
+    names = ", ".join(f"`{name}`" for name in unnamed)
+    return (
+        f"These checks did not run because their tools are not installed: {names}. Install them "
+        "and finish again, or name each one in the report's `Not verified:` line."
+    )
+
+
 def _summary(results: list[checks.Result], candidates: list[str]) -> str:
     ran = [r for r in results if not r.skipped]
     lines = []
     if ran:
-        marks = " · ".join(f"{r.name} {'✓' if r.passed else '✗'}" for r in ran)
+        marks = " · ".join(f"{r.name} {_mark(r)}" for r in ran)
         lines.append(f"devgate: {marks} ({sum(r.seconds for r in ran):.0f}s)")
     if candidates:
         lines.append("devgate: split candidates: " + "; ".join(candidates))
@@ -120,9 +156,13 @@ def evaluate(
 
     While a review is running the turn may end without a report: the reviewer's report starts a
     new turn, and the change is judged in full at its end."""
-    own = own_lines(snap, session, written, config)
-    if snap.fingerprint == session.passed or not own:
+    anywhere = own_lines(snap, session, written, EVERY_FILE)
+    if snap.fingerprint == session.passed or not anywhere:
         return Decision()
+    secrets = _secrets(_own_files(snap, anywhere))
+    own = own_lines(snap, session, written, config.review_suffixes)
+    if not own:
+        return Decision(reason=FIX + secrets) if secrets else Decision()
     mine = _own_files(snap, own)
     paths = {file.path for file in mine}
     touched = tuple(file for file in snap.files if file.path in paths)
@@ -131,11 +171,16 @@ def evaluate(
     if fingerprint != session.checked:
         changed = tuple(sorted(path for path in paths if (root / path).is_file()))
         results = checks.run_all(config.checks, root, changed, config.timeout)
-    problems = [f"`{r.name}` failed:\n{r.output}" for r in results if not r.passed]
+    failed = [r for r in results if not r.passed and not r.missing]
+    problems = [f"`{r.name}` failed:\n{leaks.redact(r.output)}" for r in failed]
     lengths = _lengths(root, touched)
-    problems += filter(None, [_style(mine, touched, lengths, config)])
+    problems += filter(None, [_style(mine, touched, lengths, config), secrets])
     if problems:
-        return Decision(reason="Fix these before finishing:\n\n" + "\n\n".join(problems))
+        return Decision(reason=FIX + "\n\n".join(problems))
+    # While a tool is missing the checks stay unrecorded: every stop until the report names it,
+    # and the first after any later code change, runs them again, so an install is picked up.
+    missing = [r.name for r in results if r.missing]
+    checked = "" if missing else fingerprint
     # Files already oversized that grew further never block: they go on the split backlog, which
     # every session start shows, and in the notice.
     grown = style.grown(touched, lengths, config)
@@ -144,15 +189,18 @@ def evaluate(
     if reviewing:
         waiting = f"devgate: `{REVIEWER}` is still running; the report is checked once it is back."
         notice = "\n".join(filter(None, [_summary(results, candidates), waiting]))
-        return Decision(notice=notice, checked=fingerprint, settled=False)
+        return Decision(notice=notice, checked=checked, settled=False)
     pending = own - state.reviewed(root)
     if sum(pending.values()) >= config.review_threshold:
         reason = _review_request(pending, mine, config)
-        return Decision(reason=reason, checked=fingerprint)
-    if not EVIDENCE.search(message):
+        return Decision(reason=reason, checked=checked)
+    evidence = EVIDENCE.search(message)
+    if not evidence:
         return Decision(
             reason="The report must end with a `Not verified:` line naming what was not checked "
             "(or `Not verified: nothing`), after the commands run and the requirements covered.",
-            checked=fingerprint,
+            checked=checked,
         )
-    return Decision(notice=_summary(results, candidates), checked=fingerprint)
+    if unnamed := _name_missing(missing, message[evidence.start() :]):
+        return Decision(reason=unnamed)
+    return Decision(notice=_summary(results, candidates), checked=checked)

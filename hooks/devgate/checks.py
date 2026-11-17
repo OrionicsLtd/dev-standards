@@ -1,5 +1,6 @@
 """Run the repository's configured checks and keep only the output worth reading."""
 
+import re
 import shlex
 import subprocess
 import time
@@ -9,17 +10,26 @@ from pathlib import Path
 from .config import Check
 
 MAX_OUTPUT_LINES = 25
+# How `uv run` reports a tool absent from the environment: it exits non-zero rather than
+# raising FileNotFoundError, and the message names no changed file, so filtering would pass it.
+SPAWN_FAILED = re.compile(r"^error: Failed to spawn: `([^`]+)`", re.MULTILINE)
 
 
 @dataclass(frozen=True)
 class Result:
-    """Outcome of one check: `output` holds the failure lines, empty when it passed."""
+    """Outcome of one check: `output` holds the failure lines, empty when it passed. A `missing`
+    check could not run because its tool is not installed: neither passed nor failed."""
 
     name: str
     passed: bool
     seconds: float
     output: str = ""
     skipped: bool = False
+    missing: bool = False
+
+
+def _missing(check: Check, tool: str, seconds: float) -> Result:
+    return Result(check.name, False, seconds, f"{tool} not installed", missing=True)
 
 
 def _relevant(output: str, changed: tuple[str, ...]) -> str:
@@ -50,11 +60,14 @@ def run(check: Check, root: Path, changed: tuple[str, ...], timeout: int) -> Res
     except subprocess.TimeoutExpired:
         return Result(check.name, False, timeout, f"timed out after {timeout}s")
     except FileNotFoundError as error:
-        return Result(check.name, True, 0.0, f"not run: {error.filename} not found", skipped=True)
+        return _missing(check, error.filename or argv[0], 0.0)
     seconds = time.monotonic() - started
     if done.returncode == 0:
         return Result(check.name, True, seconds)
     output = done.stdout + done.stderr
+    unspawned = [tool for tool in SPAWN_FAILED.findall(output) if tool in argv]
+    if unspawned:
+        return _missing(check, unspawned[0], seconds)
     if check.filtered:
         output = _relevant(output, changed)
         if not output:
