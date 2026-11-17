@@ -6,10 +6,9 @@ description: >-
   filling in gaps the user did not specify — vague instructions, missing context,
   multi-option decisions, unverified assumptions about how a library, API, or
   piece of data actually behaves, or examples introduced by "such as", "e.g."
-  or "for example" that may be a sample rather than the full list. The rule:
-  surface and resolve ambiguity (ask, or verify) instead of shipping a
-  plausible guess. The most expensive bugs are correct-looking code that
-  quietly solves the wrong problem.
+  or "for example" that may be a sample rather than the full list. Also when a
+  clear instruction looks like a bad idea. The rule: surface and resolve
+  ambiguity (ask, or verify) instead of shipping a plausible guess.
 ---
 
 # Clarify first
@@ -47,6 +46,19 @@ Calibrate to reversibility:
   `StatementParser`."
 - **Large or hard to reverse** (DB schema, public API shape, a new dependency,
   file/package structure) — **ask first**, before writing it.
+
+A vague reply doesn't settle a real fork. "Whatever you think" or "sounds good"
+in answer to an open question, a list of options or a message holding several
+forks leaves it open: re-ask each fork as two concrete options. Either reply
+to the one option you named settles it.
+
+## When the user can't be reached
+
+A subagent stops at a real fork and returns the question, with the options and
+its best guess, to its caller, which asks the user. An unattended run (a loop, a
+scheduled task) holds the step that depends on the answer, finishes the rest and
+reports the question at the end. Never settle a real fork by assumption because
+no one is there to ask; small, reversible choices still go as above.
 
 ## Verify — don't fabricate
 
@@ -88,6 +100,13 @@ names one target as the whole scope ("just this file"), or shows a format or
 style to copy rather than content to cover. When you can't tell which it is,
 calibrate as in "How to ask": if the broader reading is small and reversible,
 state it and proceed; otherwise ask one question first.
+
+## Push back on a bad instruction
+
+A clear instruction can still be a bad idea: it breaks something the user relies
+on, contradicts the spec, or costs far more than the goal needs. Before acting
+on it, say so: name the concrete cost and the alternative. Then follow the
+user's informed call.
 
 ## But don't re-ask what's already decided
 
