@@ -13,6 +13,8 @@ description: >-
 
 A doc that disagrees with the code is worse than none: the next reader trusts it.
 Keep one source of truth per fact, and change it in the same commit as the code.
+Rewriting a doc keeps its names, numbers, commands and caveats; never replace an
+unsupported claim with an invented one.
 
 ## One index
 
@@ -70,7 +72,8 @@ When work lands, update the status and the index row together.
 READMEs, CLAUDE.md files, skills, prompts and command help describe behaviour
 too. When a change renames or alters something, grep for the old name across them
 and update each in the same change. A doc's claim about a command (flags,
-output) should be checkable: run `--help` or the command on a fixture.
+output) should be checkable: run `--help` or the command on a fixture, and name
+each one you couldn't run in your report's `Not verified:` line.
 
 ## Sweep
 

@@ -23,6 +23,8 @@ applies and picks the lowest version that fixes it.
 
 - **Don't add a package for something small** — prefer the standard library or an
   existing dependency over a new package for a few lines of functionality.
+- **Check a new package before installing it** — that it is maintained and is the
+  one you meant, not a typosquat; a Python sdist runs its build code at install.
 - **Don't upgrade unrelated packages** — a bump that isn't part of the task is
   scope creep and a review burden. Leave it out.
 - **Don't regenerate the lockfile casually** — `uv lock`/`uv sync` (or `npm install`,
