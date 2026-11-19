@@ -62,4 +62,4 @@ def test_summary_lists_missing_checks() -> None:
         Result("pyright", False, 0.0, "pyright not installed", missing=True),
         Result("mypy", True, 0.0, skipped=True),
     ]
-    assert _summary(results, []) == "devgate: ruff ✓ · pyright – not installed (1s)"
+    assert _summary(results, [], []) == "devgate: ruff ✓ · pyright – not installed (1s)"

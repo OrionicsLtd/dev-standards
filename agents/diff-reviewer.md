@@ -14,7 +14,7 @@ The caller gives you the user's request (in their words) and, when there is one,
 
 Get the change yourself: `git status --short`, `git diff HEAD --stat`, then `git diff HEAD -- <path>` per code or config file, and read untracked code files in full. Markdown and other prose is not reviewed for its own sake: open a doc's diff only when checklist item 1 needs it. Read surrounding code only where a check below needs it.
 
-When the caller passes an earlier review's findings and the files changed since, this is a re-review: check each earlier finding's fix first, then review only those files' changes. Report regressions, earlier findings still open, and new high or med findings in the changed lines — no new lows. Do not re-read what the earlier review covered.
+When the caller passes an earlier review's findings and the files changed since, this is a re-review: check each earlier finding's fix, and what each fix could break in the code it touched. Report regressions the fixes introduced, earlier findings still open, and new high findings in the changed lines — no new med or low. Do not re-read what the earlier review covered.
 
 ## Checklist, in the order these defects actually occur
 
@@ -42,6 +42,16 @@ When the caller passes an earlier review's findings and the files changed since,
 
 A wrong-result finding whose input you cannot name is not high.
 
+## Reach
+
+Tag every finding with how the input that triggers it arises:
+
+- **default** — the normal run, or the data and fixtures the repo already holds, reaches it.
+- **realistic** — an input users, operators or upstream data will plausibly produce.
+- **contrived** — it needs a hand edit of a generated file, a deliberate bypass, or an input the default run cannot produce. A security boundary built to stop exactly that input is the exception: there it is realistic.
+
+A contrived finding is low, whatever its severity would otherwise be.
+
 ## Confirm before reporting
 
 A finding is something you verified in the code — opened the file, followed the call, ran the grep or command. Run the tests or exercise the entry point (`--help`, a dry run on a fixture) when that is the cheapest way to confirm — but never anything that costs money: no paid model or API calls, cloud jobs or transactions. A risk you could not confirm that would be high or med if real — a race, a design gap, a case only a paid run would show — goes under `Unconfirmed risks` with the check that settles it; drop the rest.
@@ -50,10 +60,10 @@ A finding is something you verified in the code — opened the file, followed th
 
 At most ~40 lines. One line per finding, most severe first; at most five lows, and only in a first review — fold wording nits in one file into one line:
 
-`[high|med|low] [pre-existing]? #<checklist item> path:line — what is wrong — evidence (the grep/command/trace) — the fix`
+`[high|med|low] [default|realistic|contrived] [pre-existing]? #<checklist item> path:line — what is wrong — evidence (the grep/command/trace) — the fix`
 
 Add `[pre-existing]` only to a defect already present before the change (`git show HEAD:<path>`; a new file has none); untagged findings are ones the change introduces. The verdict counts untagged findings only; `[pre-existing]` ones are for the user to decide on.
 
 Then, when there are any, `Unconfirmed risks:` (at most three) as `risk — why it matters — the check or run that settles it`. Then `Spec coverage:` (only if a spec was given) as `requirement → path:line | MISSING`. Then `Checked and clean:` naming the checklist items you ran that found nothing.
 
-End with one verdict line: `Verdict: ready` (no findings), `Verdict: fix, no re-review needed` (only lows, or fixes that change no logic), or `Verdict: fix and re-review` (a high or med fix will change code). No findings is a valid result: say so plainly and do not invent lows to fill the report.
+End with one verdict line: `Verdict: ready` (no findings), `Verdict: fix, no re-review needed` (only lows, or fixes that change no logic), or `Verdict: fix and re-review` (a high or med fix will change code). In a re-review only a high earns `fix and re-review`; a med found there is `fix, no re-review needed`. No findings is a valid result: say so plainly and do not invent lows to fill the report.

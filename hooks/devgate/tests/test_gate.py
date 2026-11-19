@@ -466,3 +466,82 @@ def test_check_output_never_echoes_a_secret(repo: Path, monkeypatch: pytest.Monk
     reason = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)["reason"]
     assert "`echo` failed:\n(line not shown: it holds a possible secret)" in reason
     assert GITHUB_TOKEN not in reason
+
+
+def _package(repo: Path, name: str, modules: int) -> None:
+    """Commit a package holding `modules` code files besides its `__init__.py` and tests."""
+    (repo / name / "tests").mkdir(parents=True)
+    for path in ["__init__.py", "tests/test_m0.py", *(f"m{i}.py" for i in range(modules))]:
+        (repo / name / path).write_text("x = 1\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "pkg"], cwd=repo, check=True)
+
+
+def test_a_module_that_crowds_its_package_blocks(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repo / ".claude/devgate.toml").write_text(
+        "checks = []\nreview_threshold = 999\nmax_modules = 3\n"
+    )
+    _package(repo, "pkg", 3)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "pkg/tests/test_m1.py", "x = 2\n")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
+    _write(monkeypatch, repo, "pkg/m3.py", "x = 2\n")
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "pkg/m3.py:1: pkg/ now holds 4 modules (limit 3)" in reply["reason"]
+
+
+def test_files_git_ignores_do_not_count_toward_a_package(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = "checks = []\nreview_threshold = 999\nmax_modules = 3\n"
+    (repo / ".claude/devgate.toml").write_text(config)
+    (repo / ".gitignore").write_text("pkg/_version.py\n")
+    _package(repo, "pkg", 2)
+    (repo / "pkg/_version.py").write_text("v = 1\n")
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "pkg/m2.py", "x = 2\n")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
+
+
+def test_a_module_deleted_in_the_same_change_frees_its_place(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = "checks = []\nreview_threshold = 999\nmax_modules = 3\n"
+    (repo / ".claude/devgate.toml").write_text(config)
+    _package(repo, "pkg", 3)
+    _fire(monkeypatch, "session-start", repo)
+    (repo / "pkg/m0.py").unlink()
+    _write(monkeypatch, repo, "pkg/m3.py", "x = 2\n")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
+
+
+def test_modules_at_the_repository_root_form_a_package(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = "checks = []\nreview_threshold = 999\nmax_modules = 2\n"
+    (repo / ".claude/devgate.toml").write_text(config)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "cli.py", "x = 2\n")
+    assert _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT) == {}
+    _write(monkeypatch, repo, "tool.py", "x = 3\n")
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "cli.py:1: ./ now holds 3 modules (limit 2)" in reply["reason"]
+
+
+def test_an_already_crowded_package_goes_to_the_reviewer_not_into_the_block(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (repo / ".claude/devgate.toml").write_text(
+        "checks = []\nreview_threshold = 5\nmax_modules = 3\n"
+    )
+    _package(repo, "pkg", 5)
+    _fire(monkeypatch, "session-start", repo)
+    _write(monkeypatch, repo, "pkg/m9.py", _lines(0, 10))
+    reply = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "diff-reviewer" in reply["reason"]
+    assert "pkg/ (6 modules, +1)" in reply["reason"]
+    _report(monkeypatch, repo)
+    done = _fire(monkeypatch, "stop", repo, last_assistant_message=PASSING_REPORT)
+    assert "decision" not in done and "pkg/ (6 modules, +1)" in done["systemMessage"]

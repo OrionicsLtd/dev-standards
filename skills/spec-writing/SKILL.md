@@ -91,8 +91,10 @@ each with its own row.
 ## Building from a spec
 
 1. Have the spec reviewed: run `spec-reviewer` with the user's request and the
-   spec path, and wait for its result. Resolve what it confirms and the open
-   questions before writing tests.
+   spec path, and wait for its result. Resolve its high and med findings and the
+   open questions before writing tests; take its contrived findings and
+   unconfirmed risks to the user rather than into new requirements. Re-review
+   once when its verdict asks, passing the earlier findings.
 2. Write the acceptance tests first — unit by unit when the spec has several —
    run them and see each fail for the right reason before writing the code it
    covers. List that failing run among the commands in the report.

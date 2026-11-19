@@ -55,7 +55,10 @@ Don't introduce new tools — find what the repo already uses and use it:
 - Prefer nesting over a flat pile. A new module belongs in a themed subpackage
   (`<pkg>/<theme>/thing.py`), not as yet another file at the package root.
   Adding the ~5th flat script to a directory is the signal to group the existing
-  ones into subpackages first.
+  ones into subpackages first; a shared filename prefix (`grid_*.py`) is a
+  subpackage waiting to be made. devgate blocks a new module that takes a package
+  past 15 code modules, and asks the reviewer about one added to a package already
+  past it.
 - **One concept per module, one theme per subpackage.** Name each for what it
   holds — `parsers.py`, not `utils_and_helpers.py`; `billing/`, not `misc/`.
   `utils`/`helpers`/`common`/`shared`/`misc` at either level is where cohesion
@@ -118,7 +121,8 @@ would be wrong. A comment restating the code is noise.
   codebase. Never conversational meta ("as requested", "as you asked", "fixed the
   bug you mentioned"), never history ("now", "previously", "after the refactor"),
   and never review/planning artifacts (priority tags like `P1`/`B2`, work-package or
-  phase numbers, spec sections, "TODO from review") left in source. No section banners.
+  phase numbers, spec sections or requirement ids like `(R4)`, "TODO from review")
+  left in source. No section banners.
 - A docstring or comment that describes behaviour the code no longer has is a bug.
   Update or delete it in the same change.
 - Note genuine quirks and gotchas (e.g. a preserved upstream typo, a workaround for

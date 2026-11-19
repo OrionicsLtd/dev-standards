@@ -105,7 +105,7 @@ checks the work itself.
 | [`CLAUDE.md`](CLAUDE.md) | The working agreement Claude loads in every session. It defines what "done" means, how to brief a reviewer (the request, the spec and the evidence, never Claude's own case for the change), and when to suggest commits (once `diff-reviewer` passes, never while work is in progress). It also sets the rules for comments and module size, and fixes the report format, which names the sibling paths ruled out and the problems left alone and ends with a `Not verified:` line. |
 | [`agents/diff-reviewer.md`](agents/diff-reviewer.md) | A read-only agent that reviews the uncommitted diff against the user's request and any spec, without seeing the session's context. It runs on Haiku at high effort, which keeps reviews cheap. |
 | [`agents/spec-reviewer.md`](agents/spec-reviewer.md) | A read-only agent that reviews a spec against the request and the code it will change, before anything is built. It runs on Sonnet, because design gaps were where Haiku's reviews were weakest. |
-| [`hooks/devgate`](hooks/devgate) | A `Stop` hook that holds a turn open while the repository's own checks fail. It also blocks comments written in planning or conversation wording, lint and test suppressions that don't say why, possible secrets, non-test files pushed past 400 lines, large changes that haven't been through `diff-reviewer`, and reports that lack their `Not verified:` line. |
+| [`hooks/devgate`](hooks/devgate) | A `Stop` hook that holds a turn open while the repository's own checks fail. It also blocks comments written in planning or conversation wording, lint and test suppressions that don't say why, possible secrets, non-test files pushed past 400 lines, new modules that push a package past 15, large changes that haven't been through `diff-reviewer`, and reports that lack their `Not verified:` line. |
 | [`hooks/context`](hooks/context) | Two hooks that keep the context window in check. Past 300k tokens, a `UserPromptSubmit` hook tells Claude to propose a new session, with a written handoff, when a request starts a new task. A `PreToolUse` hook on `Read` refuses a whole read of a text file over 400 lines and points Claude at a search and a sliced read instead; a read with an explicit `offset` or `limit` passes, as do subagents' reads and reads of images, PDFs and notebooks. Both thresholds are flags in the hook command, and both hooks fail open. |
 
 <details>
@@ -121,19 +121,23 @@ fail, pass only locally, mock the repository's own modules or leave an entry-poi
 change without an integration test, and for checks the change weakens unasked:
 deleted tests or asserts, loosened ruff, pyright, pytest or coverage config, or a
 skip added to an existing test. Finally it looks at comments and dead code. The
-severity of each finding is tied to an input that would actually fail,
-low-severity findings are capped, and risks it couldn't confirm are named rather
+severity of each finding is tied to an input that would actually fail, and each
+is tagged with how that input arises: by default, realistically, or only through
+a hand edit, a bypass or an input the default run can't produce. That last kind
+is always low. Low-severity findings are capped, and risks it couldn't confirm are named rather
 than dropped. Defects that predate the change are tagged `[pre-existing]` and left
 out of the verdict, which says whether a re-review is needed. A re-review only
-checks the earlier findings and the files changed since, and adds no new
-low-severity findings.
+checks the earlier findings, their fixes and what those fixes could break, and
+adds nothing new below high. `CLAUDE.md` allows one re-review, and a second
+only when that one finds a high.
 
 `spec-reviewer` looks at whether the requirements are testable and feasible, at
 edge cases (including concurrent workers and the rest of the category the
 request's examples came from), at domain rules, which need independent worked
 examples, at figures a model would otherwise have to compute, and at data sources
-and wiring. It uses the same severity scale as `diff-reviewer` and names the risks
-it couldn't confirm in the same way. `spec-writing` calls
+and wiring. It uses the same severity scale and reach tags as `diff-reviewer`, names the
+risks it couldn't confirm in the same way, and limits a re-review to the sections
+the revision changed. `spec-writing` calls
 it before any tests are written, and devgate ignores it, so a spec review never
 stands in for a code review.
 
@@ -184,6 +188,12 @@ longer. If it grows by more than `size_growth` lines (20 by default), it goes on
 split backlog in `.git/devgate/oversized.json`, which is shown at the start of
 every session until the file has been split back under the limit.
 
+A new code module that takes its package past `max_modules` (15 by default;
+`__init__` files and test files don't count) blocks, with a request to group
+related modules into a subpackage. A package that was already past the limit
+doesn't block: the review request asks `diff-reviewer` whether the new module
+belongs in a subpackage, and the end-of-turn notice names the package.
+
 </details>
 
 <details>
@@ -198,7 +208,8 @@ review_expiry = 3600      # seconds before a review that never reported counts a
 review_suffixes = ['.py', '.ts', '.md']   # files whose added lines count; Markdown is out by default
 max_lines = 400           # file-size limit for code files
 size_growth = 20          # lines an already-oversized file may grow before it joins the split backlog
-size_exempt = ['legacy/*']   # globs the size limit skips; replaces the default (test files, Markdown)
+max_modules = 15         # code modules a package may hold before a new one blocks
+size_exempt = ['legacy/*']   # globs the size and module limits skip; replaces the default (test files, Markdown)
 extra_banned = ['\bTicket-\d+\b']   # more comment patterns to reject
 
 [[checks]]                # replaces detection; {py} expands to the changed Python files

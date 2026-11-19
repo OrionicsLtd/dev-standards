@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import checks, leaks, state, style, suppressions
 from .config import Config
-from .diff import FileDiff, Snapshot, added_lines, line_key
+from .diff import FileDiff, Snapshot, added_lines, git, line_key
 
 REVIEWER = "diff-reviewer"
 EVIDENCE = re.compile(r"^\W*(not verified|unverified)\b", re.IGNORECASE | re.MULTILINE)
@@ -48,15 +48,39 @@ def _lengths(root: Path, files: tuple[FileDiff, ...]) -> dict[str, int]:
     return lengths
 
 
+def _modules(root: Path, files: tuple[FileDiff, ...], config: Config) -> dict[str, int]:
+    """Count the modules in every package these files add a module to. Files git ignores, such
+    as a generated `_version.py`, are not part of the package's design and don't count."""
+    counts = {}
+    new = {
+        style.package(file.path)
+        for file in files
+        if file.is_new and style.is_module(file.path, config)
+    }
+    for name in new:
+        listed = git(
+            root, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", name or "."
+        )
+        children = {
+            path
+            for path in listed.split("\0")
+            if path and style.package(path) == name and (root / path).is_file()
+        }
+        counts[name] = sum(style.is_module(path, config) for path in children)
+    return counts
+
+
 def _style(
     mine: tuple[FileDiff, ...],
     touched: tuple[FileDiff, ...],
     lengths: dict[str, int],
+    modules: dict[str, int],
     config: Config,
 ) -> str:
     findings = (
         style.banned(mine, config)
         + style.oversized(touched, lengths, config)
+        + style.crowded(mine, modules, config)
         + suppressions.unexplained(mine)
     )
     return "Style rules (see CLAUDE.md):\n" + "\n".join(map(str, findings)) if findings else ""
@@ -94,7 +118,9 @@ def _own_files(snap: Snapshot, own: Counter[str]) -> tuple[FileDiff, ...]:
     return tuple(files)
 
 
-def _review_request(pending: Counter[str], mine: tuple[FileDiff, ...], config: Config) -> str:
+def _review_request(
+    pending: Counter[str], mine: tuple[FileDiff, ...], crowded: list[str], config: Config
+) -> str:
     paths = sorted({key.split("\0", 1)[0] for key in pending})
     notes = style.dense(mine, config)
     lines = [
@@ -107,6 +133,12 @@ def _review_request(pending: Counter[str], mine: tuple[FileDiff, ...], config: C
     ]
     if notes:
         lines.append("Ask it to look hard at these comment-heavy files: " + "; ".join(notes))
+    if crowded:
+        lines.append(
+            "Ask it whether the new modules belong in a subpackage: "
+            + "; ".join(crowded)
+            + f" already held more than {config.max_modules} modules."
+        )
     return "\n".join(lines)
 
 
@@ -132,7 +164,7 @@ def _name_missing(missing: list[str], unverified: str) -> str:
     )
 
 
-def _summary(results: list[checks.Result], candidates: list[str]) -> str:
+def _summary(results: list[checks.Result], candidates: list[str], crowded: list[str]) -> str:
     ran = [r for r in results if not r.skipped]
     lines = []
     if ran:
@@ -140,6 +172,8 @@ def _summary(results: list[checks.Result], candidates: list[str]) -> str:
         lines.append(f"devgate: {marks} ({sum(r.seconds for r in ran):.0f}s)")
     if candidates:
         lines.append("devgate: split candidates: " + "; ".join(candidates))
+    if crowded:
+        lines.append("devgate: crowded packages: " + "; ".join(crowded))
     return "\n".join(lines)
 
 
@@ -174,7 +208,8 @@ def evaluate(
     failed = [r for r in results if not r.passed and not r.missing]
     problems = [f"`{r.name}` failed:\n{leaks.redact(r.output)}" for r in failed]
     lengths = _lengths(root, touched)
-    problems += filter(None, [_style(mine, touched, lengths, config), secrets])
+    modules = _modules(root, mine, config)
+    problems += filter(None, [_style(mine, touched, lengths, modules, config), secrets])
     if problems:
         return Decision(reason=FIX + "\n\n".join(problems))
     # While a tool is missing the checks stay unrecorded: every stop until the report names it,
@@ -186,13 +221,14 @@ def evaluate(
     grown = style.grown(touched, lengths, config)
     state.note_oversized(root, {path: length for path, length, _ in grown})
     candidates = style.growing(touched, lengths, config)
+    crowded = style.still_crowded(mine, modules, config)
     if reviewing:
         waiting = f"devgate: `{REVIEWER}` is still running; the report is checked once it is back."
-        notice = "\n".join(filter(None, [_summary(results, candidates), waiting]))
+        notice = "\n".join(filter(None, [_summary(results, candidates, crowded), waiting]))
         return Decision(notice=notice, checked=checked, settled=False)
     pending = own - state.reviewed(root)
     if sum(pending.values()) >= config.review_threshold:
-        reason = _review_request(pending, mine, config)
+        reason = _review_request(pending, mine, crowded, config)
         return Decision(reason=reason, checked=checked)
     evidence = EVIDENCE.search(message)
     if not evidence:
@@ -203,4 +239,4 @@ def evaluate(
         )
     if unnamed := _name_missing(missing, message[evidence.start() :]):
         return Decision(reason=unnamed)
-    return Decision(notice=_summary(results, candidates), checked=checked)
+    return Decision(notice=_summary(results, candidates, crowded), checked=checked)

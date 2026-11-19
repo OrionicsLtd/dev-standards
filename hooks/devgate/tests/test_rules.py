@@ -2,7 +2,7 @@
 
 from devgate.config import Config
 from devgate.diff import FileDiff, parse
-from devgate.style import banned, dense, growing, oversized, prose
+from devgate.style import banned, crowded, dense, growing, oversized, prose, still_crowded
 
 DIFF = """\
 diff --git a/pkg/a.py b/pkg/a.py
@@ -54,6 +54,17 @@ def test_banned_flags_planning_words_and_banners_only_in_code() -> None:
     assert found == [("a.py", 1), ("a.py", 2)]
 
 
+def test_banned_flags_spec_requirement_ids() -> None:
+    files = (
+        _file("a.py", "x = 1  # carry the pin (R10-R13)", "y = 2  # gate claims (inventory.md R1)"),
+        _file("c.py", "# R3, R4 hold for the pool", "x = 1  # see R3 for the limit"),
+        _file("d.py", "# requirement R3 covers this"),
+        _file("b.py", "y = 2  # retry three times (rate limit)", "z = R2_BUCKET  # R2 holds blobs"),
+    )
+    found = [(f.path, f.line) for f in banned(files, Config())]
+    assert found == [("a.py", 1), ("a.py", 2), ("c.py", 1), ("c.py", 2), ("d.py", 1)]
+
+
 def test_banner_rule_spares_numpy_docstring_underlines() -> None:
     file = _file("a.py", '"""Summary.', "", "Parameters", "----------", '"""')
     assert banned((file,), Config()) == []
@@ -92,3 +103,26 @@ def test_dense_names_comment_heavy_files() -> None:
     heavy = _file("h.py", *(["# note", "x = 1"] * 12))
     light = _file("l.py", *(["x = 1"] * 24))
     assert [note.split(":")[0] for note in dense((heavy, light), Config())] == ["h.py"]
+
+
+def test_crowded_blocks_only_a_new_module_that_takes_a_package_past_the_limit() -> None:
+    config = Config(max_modules=3)
+    files = (
+        _file("pkg/d.py", "x", new=True),
+        _file("pkg/a.py", "x"),
+        _file("pkg/tests/test_d.py", "x", new=True),
+        _file("pkg/notes.md", "x", new=True),
+        _file("big/z.py", "x", new=True),
+        _file("ok/b.py", "x", new=True),
+    )
+    modules = {"pkg": 4, "pkg/tests": 9, "big": 9, "ok": 3}
+    assert [str(f) for f in crowded(files, modules, config)] == [
+        "pkg/d.py:1: pkg/ now holds 4 modules (limit 3); group related modules into a subpackage"
+    ]
+    assert still_crowded(files, modules, config) == ["big/ (9 modules, +1)"]
+
+
+def test_crowded_counts_every_new_module_a_change_adds_to_one_package() -> None:
+    files = tuple(_file(f"m{i}.py", "x", new=True) for i in range(2))
+    assert [f.path for f in crowded(files, {"": 4}, Config(max_modules=3))] == ["m0.py"]
+    assert still_crowded(files, {"": 6}, Config(max_modules=3)) == ["./ (6 modules, +2)"]

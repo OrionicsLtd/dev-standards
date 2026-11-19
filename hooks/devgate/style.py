@@ -1,6 +1,8 @@
-"""Style rules on the lines a change adds: banned comment wording, file growth, comment density."""
+"""Style rules on what a change adds: banned comment wording, file growth, crowded packages and
+comment density."""
 
 import re
+from collections import Counter
 from fnmatch import fnmatch
 
 from . import leaks
@@ -103,6 +105,62 @@ def growing(files: tuple[FileDiff, ...], lengths: dict[str, int], config: Config
     return [
         f"{path} ({length} lines, +{growth})"
         for path, length, growth in grown(files, lengths, config)
+    ]
+
+
+def package(path: str) -> str:
+    """Return the directory holding `path`, "" for the repository root."""
+    return path.rpartition("/")[0]
+
+
+def is_module(path: str, config: Config) -> bool:
+    """Whether `path` counts toward its package's module limit: a code file the size limits do not
+    exempt, other than an `__init__`."""
+    exempt = any(fnmatch(path, glob) for glob in config.size_exempt)
+    is_init = path.rpartition("/")[2].startswith("__init__.")
+    return path.endswith(config.code_suffixes) and not exempt and not is_init
+
+
+def _crowding(
+    files: tuple[FileDiff, ...], modules: dict[str, int], config: Config
+) -> list[tuple[str, str, int, int]]:
+    """Return (package, first new module, modules, added) for every package this change added
+    modules to that now holds more than the limit."""
+    added: Counter[str] = Counter()
+    first: dict[str, str] = {}
+    for file in files:
+        if file.is_new and is_module(file.path, config):
+            added[package(file.path)] += 1
+            first.setdefault(package(file.path), file.path)
+    return [
+        (name, first[name], modules[name], count)
+        for name, count in sorted(added.items())
+        if modules.get(name, 0) > config.max_modules
+    ]
+
+
+def crowded(files: tuple[FileDiff, ...], modules: dict[str, int], config: Config) -> list[Finding]:
+    """Flag packages this change pushed over the module limit."""
+    return [
+        Finding(
+            path,
+            1,
+            f"{name or '.'}/ now holds {count} modules (limit {config.max_modules}); "
+            "group related modules into a subpackage",
+        )
+        for name, path, count, added in _crowding(files, modules, config)
+        if count - added <= config.max_modules
+    ]
+
+
+def still_crowded(
+    files: tuple[FileDiff, ...], modules: dict[str, int], config: Config
+) -> list[str]:
+    """Name packages already over the module limit that this change added modules to."""
+    return [
+        f"{name or '.'}/ ({count} modules, +{added})"
+        for name, _, count, added in _crowding(files, modules, config)
+        if count - added > config.max_modules
     ]
 
 

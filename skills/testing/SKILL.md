@@ -64,6 +64,9 @@ description: >-
 - **A clean checkout passes the suite.** Never read gitignored, hand-kept or live
   data, the network or the clock; use committed fixtures.
 - **Tests pass in any order:** no mutable state shared between them.
+- **Shared builders live in `conftest.py` or a helper module** under the tests
+  directory, never in a `test_*` module another one imports. When a test needs a
+  sibling's helper, move the helper there.
 - **One behaviour per test**, named for it (`test_merge_keeps_newest_entry`); use
   table-driven cases (pytest's `parametrize`) rather than a loop.
 - **Layout follows the repo.** Where there is none, keep integration tests in their

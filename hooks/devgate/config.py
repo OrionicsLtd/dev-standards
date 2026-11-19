@@ -39,6 +39,10 @@ BANNED = (
     r"\bwar[- ]?story\b",
     r"\bTODO\b.*\breview\b",
     r"\(P[0-3]\)",
+    r"\(R\d+(?:\s*[-–,]\s*R?\d+)*\)",
+    r"\.md R\d+\b",
+    r"^R\d+[:,]",
+    r"\b(see|per|under|requirements?) R\d+\b",
 )
 
 
@@ -60,6 +64,7 @@ class Config:
     checks: tuple[Check, ...] = ()
     max_lines: int = 400
     size_growth: int = 20
+    max_modules: int = 15
     size_exempt: tuple[str, ...] = TEST_GLOBS + ("*.md",)
     review_threshold: int = 200
     # Seconds after which a review that started but never reported is treated as abandoned.
